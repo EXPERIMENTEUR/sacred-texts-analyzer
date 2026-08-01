@@ -25,7 +25,7 @@ def charger_nlp():
 
 nlp = charger_nlp()
 
-LIVRES = {
+LIVRES_TANAKH = {
     "Genesis": "torah", "Exodus": "torah", "Leviticus": "torah", "Numbers": "torah", "Deuteronomy": "torah",
     "Joshua": "neviim", "Judges": "neviim", "I_Samuel": "neviim", "II_Samuel": "neviim",
     "I_Kings": "neviim", "II_Kings": "neviim", "Isaiah": "neviim", "Jeremiah": "neviim",
@@ -37,32 +37,52 @@ LIVRES = {
     "Daniel": "ketuvim", "Ezra": "ketuvim", "Nehemiah": "ketuvim", "I_Chronicles": "ketuvim", "II_Chronicles": "ketuvim"
 }
 
-livre = st.selectbox("Livre", sorted(LIVRES.keys()), key="livre_select")
-dossier = LIVRES[livre]
+@st.cache_data
+def charger_coran():
+    with open("../sacred-texts-json/coran/Coran_Anglais.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data["quran"]
 
-with open(f"../sacred-texts-json/{dossier}/{livre}.json", "r", encoding="utf-8") as f:
-    data = json.load(f)
-
-nb_chapitres = len(data["text"])
-chapitre = st.number_input("Chapitre", min_value=1, max_value=nb_chapitres, value=1, key=f"chapitre_{livre}")
-
-versets = data["text"][chapitre - 1]
-texte_complet = ""
-for verset in versets:
-    propre = re.sub(r"<i class=\"footnote\">.*?</i>", "", verset)
+def nettoyer(texte):
+    propre = re.sub(r"<i class=\"footnote\">.*?</i>", "", texte)
     propre = re.sub(r"<[^>]+>", "", propre).strip()
-    texte_complet += f"{propre} "
+    return propre
 
-doc = nlp(texte_complet)
+def afficher_analyse(texte_complet):
+    doc = nlp(texte_complet)
+    ents_filtrees = [e for e in doc.ents if e.label_ in CATEGORIES_PERSONNALISEES]
 
-ents_filtrees = [e for e in doc.ents if e.label_ in CATEGORIES_PERSONNALISEES]
+    st.subheader("Texte")
+    st.write(texte_complet)
 
-st.subheader("Texte")
-st.write(texte_complet)
+    st.subheader("Entites detectees (categories personnalisees uniquement)")
+    if ents_filtrees:
+        for ent in ents_filtrees:
+            st.write(f"**{ent.text}** — {ent.label_}")
+    else:
+        st.write("Aucune entite personnalisee detectee.")
 
-st.subheader("Entites detectees (categories personnalisees uniquement)")
-if ents_filtrees:
-    for ent in ents_filtrees:
-        st.write(f"**{ent.text}** — {ent.label_}")
-else:
-    st.write("Aucune entite personnalisee detectee dans ce chapitre.")
+corpus = st.radio("Corpus", ["Tanakh", "Coran"], key="corpus_select")
+
+if corpus == "Tanakh":
+    livre = st.selectbox("Livre", sorted(LIVRES_TANAKH.keys()), key="livre_select")
+    dossier = LIVRES_TANAKH[livre]
+
+    with open(f"../sacred-texts-json/{dossier}/{livre}.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    nb_chapitres = len(data["text"])
+    chapitre = st.number_input("Chapitre", min_value=1, max_value=nb_chapitres, value=1, key=f"chapitre_{livre}")
+
+    versets = data["text"][chapitre - 1]
+    texte_complet = " ".join(nettoyer(v) for v in versets)
+    afficher_analyse(texte_complet)
+
+elif corpus == "Coran":
+    versets_coran = charger_coran()
+    chapitres_disponibles = sorted(set(v["chapter"] for v in versets_coran))
+    chapitre = st.selectbox("Sourate (numero)", chapitres_disponibles, key="sourate_select")
+
+    versets_du_chapitre = [v for v in versets_coran if v["chapter"] == chapitre]
+    texte_complet = " ".join(nettoyer(v["text"]) for v in versets_du_chapitre)
+    afficher_analyse(texte_complet)
