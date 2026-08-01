@@ -45,8 +45,12 @@ def charger_coran():
 
 def nettoyer(texte):
     propre = re.sub(r"<i class=\"footnote\">.*?</i>", "", texte)
-    propre = re.sub(r"<[^>]+>", "", propre).strip()
-    return propre
+    propre = re.sub(r"<[^>]+>", "", propre)
+    propre = re.sub(r"={2,}[^=]*={2,}", "", propre)
+    propre = re.sub(r"[⌈⌉]", "", propre)
+    propre = re.sub(r"\n+", " ", propre)
+    propre = re.sub(r"\s{2,}", " ", propre)
+    return propre.strip()
 
 def afficher_analyse(texte_complet):
     doc = nlp(texte_complet)
@@ -62,7 +66,7 @@ def afficher_analyse(texte_complet):
     else:
         st.write("Aucune entite personnalisee detectee.")
 
-corpus = st.radio("Corpus", ["Tanakh", "Coran"], key="corpus_select")
+corpus = st.radio("Corpus", ["Tanakh", "Coran", "Livre d'Enoch"], key="corpus_select")
 
 if corpus == "Tanakh":
     livre = st.selectbox("Livre", sorted(LIVRES_TANAKH.keys()), key="livre_select")
@@ -85,4 +89,14 @@ elif corpus == "Coran":
 
     versets_du_chapitre = [v for v in versets_coran if v["chapter"] == chapitre]
     texte_complet = " ".join(nettoyer(v["text"]) for v in versets_du_chapitre)
+    afficher_analyse(texte_complet)
+
+elif corpus == "Livre d'Enoch":
+    chapitre = st.number_input("Chapitre", min_value=1, max_value=109, value=1, key="chapitre_enoch")
+    numero_fichier = f"{chapitre:02d}"
+
+    with open(f"../sacred-texts-json/enoch/Chapter_{numero_fichier}.json", "r", encoding="utf-8-sig") as f:
+        data = json.load(f)
+
+    texte_complet = nettoyer(data["text"])
     afficher_analyse(texte_complet)
