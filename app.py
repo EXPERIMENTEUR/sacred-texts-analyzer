@@ -8,7 +8,12 @@ st.title("Analyseur de textes sacrés")
 
 CATEGORIES_PERSONNALISEES = {
     "DEITY", "PROPHET_FIGURE", "CELESTIAL_BEING", "SACRED_PLACE",
-    "SACRED_OBJECT", "CELESTIAL_PHENOMENON", "CONCEPT_KNOWLEDGE", "PEOPLE_GROUP"
+    "SACRED_OBJECT", "CELESTIAL_PHENOMENON", "CONCEPT_KNOWLEDGE", "PEOPLE_GROUP",
+    "SYMBOLIC_NUMBER", "ELEMENT", "COLOR_SYMBOLIC", "METAL_MATERIAL",
+    "CARDINAL_DIRECTION", "CELESTIAL_BODY", "ANIMAL_SYMBOLIC", "PHYSICAL_DESCRIPTOR",
+    "SACRED_EVENT", "RITUAL_PRACTICE", "AFTERLIFE_CONCEPT", "SACRED_TEXT",
+    "COSMIC_STRUCTURE", "TIME_CONCEPT", "PLANT_SYMBOLIC", "SOUND_PHENOMENON",
+    "BODY_PART_SYMBOLIC", "SOCIAL_ROLE"
 }
 
 @st.cache_resource
@@ -20,9 +25,22 @@ def charger_nlp():
 
 nlp = charger_nlp()
 
-livre = st.selectbox("Livre", ["Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy"], key="livre_select")
+LIVRES = {
+    "Genesis": "torah", "Exodus": "torah", "Leviticus": "torah", "Numbers": "torah", "Deuteronomy": "torah",
+    "Joshua": "neviim", "Judges": "neviim", "I_Samuel": "neviim", "II_Samuel": "neviim",
+    "I_Kings": "neviim", "II_Kings": "neviim", "Isaiah": "neviim", "Jeremiah": "neviim",
+    "Ezekiel": "neviim", "Hosea": "neviim", "Joel": "neviim", "Amos": "neviim",
+    "Obadiah": "neviim", "Jonah": "neviim", "Micah": "neviim", "Nahum": "neviim",
+    "Habakkuk": "neviim", "Zephaniah": "neviim", "Haggai": "neviim", "Zechariah": "neviim", "Malachi": "neviim",
+    "Psalms": "ketuvim", "Proverbs": "ketuvim", "Job": "ketuvim", "Song_of_Songs": "ketuvim",
+    "Ruth": "ketuvim", "Lamentations": "ketuvim", "Ecclesiastes": "ketuvim", "Esther": "ketuvim",
+    "Daniel": "ketuvim", "Ezra": "ketuvim", "Nehemiah": "ketuvim", "I_Chronicles": "ketuvim", "II_Chronicles": "ketuvim"
+}
 
-with open(f"../sacred-texts-json/torah/{livre}.json", "r", encoding="utf-8") as f:
+livre = st.selectbox("Livre", sorted(LIVRES.keys()), key="livre_select")
+dossier = LIVRES[livre]
+
+with open(f"../sacred-texts-json/{dossier}/{livre}.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
 nb_chapitres = len(data["text"])
@@ -30,7 +48,7 @@ chapitre = st.number_input("Chapitre", min_value=1, max_value=nb_chapitres, valu
 
 versets = data["text"][chapitre - 1]
 texte_complet = ""
-for i, verset in enumerate(versets, start=1):
+for verset in versets:
     propre = re.sub(r"<i class=\"footnote\">.*?</i>", "", verset)
     propre = re.sub(r"<[^>]+>", "", propre).strip()
     texte_complet += f"{propre} "
