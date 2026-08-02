@@ -66,7 +66,7 @@ def afficher_analyse(texte_complet):
     else:
         st.write("Aucune entite personnalisee detectee.")
 
-corpus = st.radio("Corpus", ["Tanakh", "Coran", "Livre d'Enoch"], key="corpus_select")
+corpus = st.radio("Corpus", ["Tanakh", "Coran", "Livre d'Enoch", "Rigveda (anglais)"], key="corpus_select")
 
 if corpus == "Tanakh":
     livre = st.selectbox("Livre", sorted(LIVRES_TANAKH.keys()), key="livre_select")
@@ -99,4 +99,18 @@ elif corpus == "Livre d'Enoch":
         data = json.load(f)
 
     texte_complet = nettoyer(data["text"])
+    afficher_analyse(texte_complet)
+
+elif corpus == "Rigveda (anglais)":
+    numero_livre = st.selectbox("Livre (Mandala)", [f"{i:02d}" for i in range(1, 11)], key="livre_rigveda")
+
+    with open(f"../sacred-texts-json/vedas/rigveda_anglais/Book_{numero_livre}.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    hymnes = data["hymns"]
+    titres_hymnes = [h["title"] for h in hymnes]
+    titre_choisi = st.selectbox("Hymne", titres_hymnes, key="hymne_rigveda")
+
+    hymne = next(h for h in hymnes if h["title"] == titre_choisi)
+    texte_complet = nettoyer(hymne["text"])
     afficher_analyse(texte_complet)
