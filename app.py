@@ -2,6 +2,7 @@ import streamlit as st
 import spacy
 import json
 import re
+from deep_translator import GoogleTranslator
 
 st.set_page_config(layout="wide")
 st.title("Analyseur de textes sacrés")
@@ -13,7 +14,8 @@ CATEGORIES_PERSONNALISEES = {
     "CARDINAL_DIRECTION", "CELESTIAL_BODY", "ANIMAL_SYMBOLIC", "PHYSICAL_DESCRIPTOR",
     "SACRED_EVENT", "RITUAL_PRACTICE", "AFTERLIFE_CONCEPT", "SACRED_TEXT",
     "COSMIC_STRUCTURE", "TIME_CONCEPT", "PLANT_SYMBOLIC", "SOUND_PHENOMENON",
-    "BODY_PART_SYMBOLIC", "SOCIAL_ROLE"
+    "BODY_PART_SYMBOLIC", "SOCIAL_ROLE", "KNOWLEDGE_TRANSMISSION", "PHENOMENON_NAMING",
+    "NEGATIVE_ENTITY", "LIFESPAN", "VISION_DREAM_STATE"
 }
 
 @st.cache_resource
@@ -52,13 +54,59 @@ def nettoyer(texte):
     propre = re.sub(r"\s{2,}", " ", propre)
     return propre.strip()
 
-def afficher_analyse(texte_complet):
+@st.cache_data
+def traduire_francais(texte):
+    try:
+        return GoogleTranslator(source="en", target="fr").translate(texte)
+    except Exception as e:
+        return f"[Erreur de traduction : {e}]"
+
+def afficher_analyse_avec_versets(liste_versets):
+    afficher_fr = st.checkbox("Afficher en français (traduction automatique)", key="trad_checkbox")
+
+    st.subheader("Texte (ligne par ligne)")
+    for numero, texte_verset in liste_versets:
+        if afficher_fr:
+            with st.spinner(f"Traduction ligne {numero}..."):
+                texte_affiche = traduire_francais(texte_verset)
+        else:
+            texte_affiche = texte_verset
+        st.write(f"**Ligne {numero}.** {texte_affiche}")
+
+    if afficher_fr:
+        st.caption("Traduction automatique — l'analyse ci-dessous reste basee sur le texte anglais original.")
+
+    st.subheader("Entites detectees, avec numero de ligne")
+    resultats = []
+    for numero, texte_verset in liste_versets:
+        doc = nlp(texte_verset)
+        for ent in doc.ents:
+            if ent.label_ in CATEGORIES_PERSONNALISEES:
+                resultats.append((numero, ent.text, ent.label_))
+
+    if resultats:
+        for numero, texte_ent, label in resultats:
+            st.write(f"**Ligne {numero}** — {texte_ent} — {label}")
+    else:
+        st.write("Aucune entite personnalisee detectee.")
+
+def afficher_analyse_globale(texte_complet):
+    afficher_fr = st.checkbox("Afficher en français (traduction automatique)", key="trad_checkbox")
+
     doc = nlp(texte_complet)
     ents_filtrees = [e for e in doc.ents if e.label_ in CATEGORIES_PERSONNALISEES]
 
     st.subheader("Texte")
-    st.write(texte_complet)
+    if afficher_fr:
+        with st.spinner("Traduction en cours..."):
+            morceaux = [texte_complet[i:i+4500] for i in range(0, len(texte_complet), 4500)]
+            texte_fr = " ".join(traduire_francais(m) for m in morceaux)
+        st.write(texte_fr)
+        st.caption("Traduction automatique — l'analyse ci-dessous reste basee sur le texte anglais original.")
+    else:
+        st.write(texte_complet)
 
+    st.caption("Ce corpus n'est pas decoupe par verset dans les donnees source : la position exacte n'est pas disponible, seulement la presence dans le texte.")
     st.subheader("Entites detectees (categories personnalisees uniquement)")
     if ents_filtrees:
         for ent in ents_filtrees:
@@ -79,8 +127,8 @@ if corpus == "Tanakh":
     chapitre = st.number_input("Chapitre", min_value=1, max_value=nb_chapitres, value=1, key=f"chapitre_{livre}")
 
     versets = data["text"][chapitre - 1]
-    texte_complet = " ".join(nettoyer(v) for v in versets)
-    afficher_analyse(texte_complet)
+    liste_versets = [(i + 1, nettoyer(v)) for i, v in enumerate(versets)]
+    afficher_analyse_avec_versets(liste_versets)
 
 elif corpus == "Coran":
     versets_coran = charger_coran()
@@ -88,8 +136,8 @@ elif corpus == "Coran":
     chapitre = st.selectbox("Sourate (numero)", chapitres_disponibles, key="sourate_select")
 
     versets_du_chapitre = [v for v in versets_coran if v["chapter"] == chapitre]
-    texte_complet = " ".join(nettoyer(v["text"]) for v in versets_du_chapitre)
-    afficher_analyse(texte_complet)
+    liste_versets = [(v["verse"], nettoyer(v["text"])) for v in versets_du_chapitre]
+    afficher_analyse_avec_versets(liste_versets)
 
 elif corpus == "Livre d'Enoch":
     chapitre = st.number_input("Chapitre", min_value=1, max_value=109, value=1, key="chapitre_enoch")
@@ -98,8 +146,12 @@ elif corpus == "Livre d'Enoch":
     with open(f"../sacred-texts-json/enoch/Chapter_{numero_fichier}.json", "r", encoding="utf-8-sig") as f:
         data = json.load(f)
 
-    texte_complet = nettoyer(data["text"])
-    afficher_analyse(texte_complet)
+    texte_brut = data["text"]
+    texte_sans_titres = re.sub(r"={2,}[^=]*={2,}", "", texte_brut)
+    texte_sans_titres = re.sub(r"CHAPTER [IVXLC]+\.", "", texte_sans_titres)
+    paragraphes = [p for p in texte_sans_titres.split("\n\n") if p.strip()]
+    liste_versets = [(i + 1, nettoyer(p)) for i, p in enumerate(paragraphes) if nettoyer(p)]
+    afficher_analyse_avec_versets(liste_versets)
 
 elif corpus == "Rigveda (anglais)":
     numero_livre = st.selectbox("Livre (Mandala)", [f"{i:02d}" for i in range(1, 11)], key="livre_rigveda")
@@ -112,5 +164,6 @@ elif corpus == "Rigveda (anglais)":
     titre_choisi = st.selectbox("Hymne", titres_hymnes, key="hymne_rigveda")
 
     hymne = next(h for h in hymnes if h["title"] == titre_choisi)
-    texte_complet = nettoyer(hymne["text"])
-    afficher_analyse(texte_complet)
+    strophes = [s for s in hymne["text"].split("p: ") if s.strip()]
+    liste_versets = [(i + 1, nettoyer(s)) for i, s in enumerate(strophes) if nettoyer(s)]
+    afficher_analyse_avec_versets(liste_versets)
