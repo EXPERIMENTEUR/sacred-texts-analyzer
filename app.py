@@ -114,7 +114,7 @@ def afficher_analyse_globale(texte_complet):
     else:
         st.write("Aucune entite personnalisee detectee.")
 
-corpus = st.radio("Corpus", ["Tanakh", "Coran", "Livre d'Enoch", "Rigveda (anglais)"], key="corpus_select")
+corpus = st.radio("Corpus", ["Tanakh", "Coran", "Livre d'Enoch", "Rigveda (anglais)", "Samaveda (anglais)"], key="corpus_select")
 
 if corpus == "Tanakh":
     livre = st.selectbox("Livre", sorted(LIVRES_TANAKH.keys()), key="livre_select")
@@ -165,5 +165,21 @@ elif corpus == "Rigveda (anglais)":
 
     hymne = next(h for h in hymnes if h["title"] == titre_choisi)
     strophes = [s for s in hymne["text"].split("p: ") if s.strip()]
+    liste_versets = [(i + 1, nettoyer(s)) for i, s in enumerate(strophes) if nettoyer(s)]
+    afficher_analyse_avec_versets(liste_versets)
+
+elif corpus == "Samaveda (anglais)":
+    numero_livre = st.selectbox("Livre", [f"{i:02d}" for i in range(1, 16)], key="livre_samaveda")
+
+    with open(f"../sacred-texts-json/vedas/samaveda_anglais/Book_{numero_livre}.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    entrees = data["data"]
+    titres_entrees = [f"{e['chapter']} - {e['title']}" for e in entrees]
+    titre_choisi = st.selectbox("Chapitre / Decade", titres_entrees, key="chapitre_samaveda")
+
+    index_choisi = titres_entrees.index(titre_choisi)
+    entree = entrees[index_choisi]
+    strophes = [s for s in entree["content"].split("p:") if s.strip()]
     liste_versets = [(i + 1, nettoyer(s)) for i, s in enumerate(strophes) if nettoyer(s)]
     afficher_analyse_avec_versets(liste_versets)
