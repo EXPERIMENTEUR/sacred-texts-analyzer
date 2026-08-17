@@ -18,6 +18,16 @@ CATEGORIES_PERSONNALISEES = {
     "NEGATIVE_ENTITY", "LIFESPAN", "VISION_DREAM_STATE"
 }
 
+ZONES = {
+    "Moyen-Orient": ["Tanakh", "Coran", "Livre d'Enoch"
+, "Apocalypse d'Esdras"],
+    "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)"],
+    "Afrique": [],
+    "Europe": [],
+    "Ameriques": [],
+    "Oceanie": []
+}
+
 @st.cache_resource
 def charger_nlp():
     nlp = spacy.load("en_core_web_sm")
@@ -90,33 +100,20 @@ def afficher_analyse_avec_versets(liste_versets):
     else:
         st.write("Aucune entite personnalisee detectee.")
 
-def afficher_analyse_globale(texte_complet):
-    afficher_fr = st.checkbox("Afficher en français (traduction automatique)", key="trad_checkbox")
+corpus = None
 
-    doc = nlp(texte_complet)
-    ents_filtrees = [e for e in doc.ents if e.label_ in CATEGORIES_PERSONNALISEES]
+st.sidebar.header("Navigation par zone geographique")
+zone = st.sidebar.radio("Zone", list(ZONES.keys()), key="zone_select")
 
-    st.subheader("Texte")
-    if afficher_fr:
-        with st.spinner("Traduction en cours..."):
-            morceaux = [texte_complet[i:i+4500] for i in range(0, len(texte_complet), 4500)]
-            texte_fr = " ".join(traduire_francais(m) for m in morceaux)
-        st.write(texte_fr)
-        st.caption("Traduction automatique — l'analyse ci-dessous reste basee sur le texte anglais original.")
-    else:
-        st.write(texte_complet)
+if not ZONES[zone]:
+    st.sidebar.info("Aucun corpus dans cette zone pour l'instant.")
+else:
+    corpus = st.sidebar.radio("Corpus", ZONES[zone], key="corpus_select")
 
-    st.caption("Ce corpus n'est pas decoupe par verset dans les donnees source : la position exacte n'est pas disponible, seulement la presence dans le texte.")
-    st.subheader("Entites detectees (categories personnalisees uniquement)")
-    if ents_filtrees:
-        for ent in ents_filtrees:
-            st.write(f"**{ent.text}** — {ent.label_}")
-    else:
-        st.write("Aucune entite personnalisee detectee.")
+if corpus is None:
+    st.info("Choisissez une zone contenant au moins un corpus dans le menu a gauche.")
 
-corpus = st.radio("Corpus", ["Tanakh", "Coran", "Livre d'Enoch", "Rigveda (anglais)", "Samaveda (anglais)"], key="corpus_select")
-
-if corpus == "Tanakh":
+elif corpus == "Tanakh":
     livre = st.selectbox("Livre", sorted(LIVRES_TANAKH.keys()), key="livre_select")
     dossier = LIVRES_TANAKH[livre]
 
@@ -182,4 +179,16 @@ elif corpus == "Samaveda (anglais)":
     entree = entrees[index_choisi]
     strophes = [s for s in entree["content"].split("p:") if s.strip()]
     liste_versets = [(i + 1, nettoyer(s)) for i, s in enumerate(strophes) if nettoyer(s)]
+    afficher_analyse_avec_versets(liste_versets)
+elif corpus == "Apocalypse d'Esdras":
+    with open("../sacred-texts-json/2esdras_complete.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    chapitres_esdras = data["chapters"]
+    titres_chapitres = [f"Chapitre {c['chapter']}" for c in chapitres_esdras]
+    titre_choisi = st.selectbox("Chapitre", titres_chapitres, key="chapitre_esdras")
+
+    index_choisi = titres_chapitres.index(titre_choisi)
+    chapitre_data = chapitres_esdras[index_choisi]
+    liste_versets = [(v["verse"], nettoyer(v["text"])) for v in chapitre_data["verses"]]
     afficher_analyse_avec_versets(liste_versets)
