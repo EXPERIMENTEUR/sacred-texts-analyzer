@@ -268,6 +268,18 @@ def afficher_recoupement():
 
     st.success(f"{len(resultats)} entites uniques detectees a travers {len(CHARGEURS_PAR_CORPUS)} corpus.")
 
+    st.subheader("Top 20 des symboles les plus frequents (tous corpus confondus)")
+    classement = sorted(
+        [(cle.split("|||")[0], cle.split("|||")[1], infos["occurrences"]) for cle, infos in resultats.items()],
+        key=lambda x: -x[2]
+    )[:20]
+
+    if classement:
+        import pandas as pd
+        df_classement = pd.DataFrame(classement, columns=["Symbole", "Categorie", "Occurrences"])
+        st.bar_chart(df_classement.set_index("Symbole")["Occurrences"])
+        st.dataframe(df_classement, use_container_width=True)
+
     recherche = st.text_input("Filtrer par mot ou categorie (optionnel)", key="filtre_recoupement")
 
     lignes = []
