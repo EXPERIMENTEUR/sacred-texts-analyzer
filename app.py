@@ -2,6 +2,7 @@ import streamlit as st
 import spacy
 import json
 import re
+import time
 from deep_translator import GoogleTranslator
 
 st.set_page_config(layout="wide")
@@ -15,12 +16,13 @@ CATEGORIES_PERSONNALISEES = {
     "SACRED_EVENT", "RITUAL_PRACTICE", "AFTERLIFE_CONCEPT", "SACRED_TEXT",
     "COSMIC_STRUCTURE", "TIME_CONCEPT", "PLANT_SYMBOLIC", "SOUND_PHENOMENON",
     "BODY_PART_SYMBOLIC", "SOCIAL_ROLE", "KNOWLEDGE_TRANSMISSION", "PHENOMENON_NAMING",
-       "NEGATIVE_ENTITY", "LIFESPAN", "VISION_DREAM_STATE", "GENEALOGY", "BUILDING_TYPE",
+    "NEGATIVE_ENTITY", "LIFESPAN", "VISION_DREAM_STATE", "GENEALOGY", "BUILDING_TYPE",
     "HUMAN_MORPHOLOGY", "ENTITY_MORPHOLOGY", "BEING_OF_LIGHT", "KNOWLEDGE_BEARER"
 }
 
 ZONES = {
     "Moyen-Orient": ["Tanakh", "Coran", "Livre d'Enoch", "Apocalypse d'Esdras"],
+    "Mesopotamie": ["Epopee de Gilgamesh"],
     "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)"],
     "Afrique": [],
     "Europe": [],
@@ -84,6 +86,7 @@ def afficher_analyse_avec_versets(liste_versets):
         if afficher_fr:
             with st.spinner(f"Traduction ligne {numero}..."):
                 texte_affiche = traduire_francais(texte_verset)
+            time.sleep(0.3)
         else:
             texte_affiche = texte_verset
         st.write(f"**Ligne {numero}.** {texte_affiche}")
@@ -115,7 +118,11 @@ def afficher_analyse_globale(texte_complet):
     if afficher_fr:
         with st.spinner("Traduction en cours..."):
             morceaux = [texte_complet[i:i+4500] for i in range(0, len(texte_complet), 4500)]
-            texte_fr = " ".join(traduire_francais(m) for m in morceaux)
+            morceaux_traduits = []
+            for m in morceaux:
+                morceaux_traduits.append(traduire_francais(m))
+                time.sleep(0.5)
+            texte_fr = " ".join(morceaux_traduits)
         st.write(texte_fr)
         st.caption("Traduction automatique — l'analyse ci-dessous reste basee sur le texte anglais original.")
     else:
@@ -214,6 +221,19 @@ def textes_esdras_complet():
         pass
     return resultats
 
+def textes_gilgamesh_complet():
+    resultats = []
+    try:
+        with open("../sacred-texts-json/gilgamesh_complete.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for tablette in data["tablets"]:
+            texte_t = nettoyer(tablette["text"])
+            if texte_t.strip():
+                resultats.append((f"Gilgamesh - Tablette {tablette['tablet']}", texte_t))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -221,6 +241,7 @@ CHARGEURS_PAR_CORPUS = {
     "Apocalypse d'Esdras": (textes_esdras_complet, "Moyen-Orient"),
     "Rigveda (anglais)": (textes_rigveda_complet, "Asie du Sud"),
     "Samaveda (anglais)": (textes_samaveda_complet, "Asie du Sud"),
+    "Epopee de Gilgamesh": (textes_gilgamesh_complet, "Mesopotamie"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -408,3 +429,16 @@ else:
         chapitre_data = chapitres_esdras[index_choisi]
         liste_versets = [(v["verse"], nettoyer(v["text"])) for v in chapitre_data["verses"]]
         afficher_analyse_avec_versets(liste_versets)
+
+    elif corpus == "Epopee de Gilgamesh":
+        with open("../sacred-texts-json/gilgamesh_complete.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        tablettes_gilgamesh = data["tablets"]
+        titres_tablettes = [f"Tablette {t['tablet']} - {t['title']}" for t in tablettes_gilgamesh]
+        titre_choisi = st.selectbox("Tablette", titres_tablettes, key="tablette_gilgamesh")
+
+        index_choisi = titres_tablettes.index(titre_choisi)
+        tablette_data = tablettes_gilgamesh[index_choisi]
+        texte_complet = nettoyer(tablette_data["text"])
+        afficher_analyse_globale(texte_complet)
