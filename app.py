@@ -23,8 +23,9 @@ CATEGORIES_PERSONNALISEES = {
 ZONES = {
     "Moyen-Orient": ["Tanakh", "Coran", "Livre d'Enoch", "Apocalypse d'Esdras"],
     "Mesopotamie": ["Epopee de Gilgamesh"],
+    "Iran/Perse": ["Avesta"],
     "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)"],
-    "Afrique": [],
+    "Afrique": ["Evangile de Thomas"],
     "Europe": [],
     "Ameriques": [],
     "Oceanie": []
@@ -86,7 +87,7 @@ def afficher_analyse_avec_versets(liste_versets):
         if afficher_fr:
             with st.spinner(f"Traduction ligne {numero}..."):
                 texte_affiche = traduire_francais(texte_verset)
-            time.sleep(0.3)
+            time.sleep(0.8)
         else:
             texte_affiche = texte_verset
         st.write(f"**Ligne {numero}.** {texte_affiche}")
@@ -121,7 +122,7 @@ def afficher_analyse_globale(texte_complet):
             morceaux_traduits = []
             for m in morceaux:
                 morceaux_traduits.append(traduire_francais(m))
-                time.sleep(0.5)
+                time.sleep(1.5)
             texte_fr = " ".join(morceaux_traduits)
         st.write(texte_fr)
         st.caption("Traduction automatique — l'analyse ci-dessous reste basee sur le texte anglais original.")
@@ -234,6 +235,40 @@ def textes_gilgamesh_complet():
         pass
     return resultats
 
+def textes_thomas_complet():
+    resultats = []
+    try:
+        with open("../sacred-texts-json/thomas_complete.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for logion in data["sayings"]:
+            texte_l = nettoyer(logion["text"])
+            if texte_l.strip():
+                resultats.append((f"Thomas - Logion {logion['saying']}", texte_l))
+    except Exception:
+        pass
+    return resultats
+
+def textes_avesta_complet():
+    resultats = []
+    try:
+        with open("../sacred-texts-json/avesta_complete.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for sec in data["vendidad"]:
+            t = nettoyer(sec["text"])
+            if t.strip():
+                resultats.append((f"Avesta - Vendidad - Fargard {sec['fargard']}", t))
+        for sec in data["yashts"]:
+            t = nettoyer(sec["text"])
+            if t.strip():
+                resultats.append((f"Avesta - Yasht {sec['yasht_numero']} {sec['yasht_nom'].title()}", t))
+        for i, sec in enumerate(data["yasna"], start=1):
+            t = nettoyer(sec["text"])
+            if t.strip():
+                resultats.append((f"Avesta - Yasna - Bloc {i} (en-tete {sec['yasna_entete_courante']})", t))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -242,6 +277,8 @@ CHARGEURS_PAR_CORPUS = {
     "Rigveda (anglais)": (textes_rigveda_complet, "Asie du Sud"),
     "Samaveda (anglais)": (textes_samaveda_complet, "Asie du Sud"),
     "Epopee de Gilgamesh": (textes_gilgamesh_complet, "Mesopotamie"),
+    "Evangile de Thomas": (textes_thomas_complet, "Afrique"),
+    "Avesta": (textes_avesta_complet, "Iran/Perse"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -442,3 +479,38 @@ else:
         tablette_data = tablettes_gilgamesh[index_choisi]
         texte_complet = nettoyer(tablette_data["text"])
         afficher_analyse_globale(texte_complet)
+
+    elif corpus == "Evangile de Thomas":
+        with open("../sacred-texts-json/thomas_complete.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        logia = data["sayings"]
+        groupes = [f"Logia {i}-{min(i + 9, len(logia))}" for i in range(1, len(logia) + 1, 10)]
+        groupe_choisi = st.selectbox("Groupe de logia", groupes, key="groupe_thomas")
+
+        index_groupe = groupes.index(groupe_choisi)
+        debut = index_groupe * 10
+        logia_du_groupe = logia[debut:debut + 10]
+        liste_versets = [(s["saying"], nettoyer(s["text"])) for s in logia_du_groupe]
+        afficher_analyse_avec_versets(liste_versets)
+
+    elif corpus == "Avesta":
+        with open("../sacred-texts-json/avesta_complete.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        st.warning("Texte issu d'un OCR de scans du 19e siecle. Chaque section commence par une introduction ou un resume redige par le traducteur, et les notes de bas de page sont melangees au texte : les entites detectees melent donc texte avestique et commentaire. Decoupage approximatif (a une page pres).")
+
+        partie = st.selectbox("Partie", ["Vendidad", "Yashts", "Yasna"], key="partie_avesta")
+        if partie == "Vendidad":
+            sections = data["vendidad"]
+            titres = [f"Fargard {x['fargard']}" for x in sections]
+        elif partie == "Yashts":
+            sections = data["yashts"]
+            titres = [f"Yasht {x['yasht_numero']} - {x['yasht_nom'].title()}" for x in sections]
+        else:
+            sections = data["yasna"]
+            titres = [f"Bloc {i} (en-tete Yasna {x['yasna_entete_courante']})" for i, x in enumerate(sections, start=1)]
+
+        titre_choisi = st.selectbox("Section", titres, key=f"section_avesta_{partie}")
+        section_data = sections[titres.index(titre_choisi)]
+        afficher_analyse_globale(nettoyer(section_data["text"]))
