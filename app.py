@@ -21,7 +21,7 @@ CATEGORIES_PERSONNALISEES = {
 }
 
 ZONES = {
-    "Moyen-Orient": ["Tanakh", "Coran", "Livre d'Enoch", "Apocalypse d'Esdras"],
+    "Moyen-Orient": ["Tanakh", "Coran", "Livre d'Enoch", "Apocalypse d'Esdras", "Testaments des 12 Patriarches"],
     "Mesopotamie": ["Epopee de Gilgamesh"],
     "Iran/Perse": ["Avesta"],
     "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)"],
@@ -269,6 +269,20 @@ def textes_avesta_complet():
         pass
     return resultats
 
+def textes_testaments_complet():
+    resultats = []
+    try:
+        with open("../sacred-texts-json/testaments_12_patriarches_complete.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for testament in data["testaments"]:
+            for chap in testament["chapters"]:
+                t = nettoyer(chap["text"])
+                if t.strip():
+                    resultats.append((f"Testament de {testament['patriarch']} - ch. {chap['chapter']}", t))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -279,6 +293,7 @@ CHARGEURS_PAR_CORPUS = {
     "Epopee de Gilgamesh": (textes_gilgamesh_complet, "Mesopotamie"),
     "Evangile de Thomas": (textes_thomas_complet, "Afrique"),
     "Avesta": (textes_avesta_complet, "Iran/Perse"),
+    "Testaments des 12 Patriarches": (textes_testaments_complet, "Moyen-Orient"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -514,3 +529,16 @@ else:
         titre_choisi = st.selectbox("Section", titres, key=f"section_avesta_{partie}")
         section_data = sections[titres.index(titre_choisi)]
         afficher_analyse_globale(nettoyer(section_data["text"]))
+
+    elif corpus == "Testaments des 12 Patriarches":
+        with open("../sacred-texts-json/testaments_12_patriarches_complete.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        st.info("Traduction anglaise du 19e siecle (Ante-Nicene Fathers, vol. VIII). La datation de ce texte et la presence d'interpolations chretiennes sont debattues parmi les chercheurs. Les notes critiques du traducteur ont ete retirees.")
+
+        testaments = data["testaments"]
+        titres = [t["title"] for t in testaments]
+        titre_choisi = st.selectbox("Testament", titres, key="testament_patriarche")
+        testament_data = testaments[titres.index(titre_choisi)]
+        liste_versets = [(c["chapter"], nettoyer(c["text"])) for c in testament_data["chapters"]]
+        afficher_analyse_avec_versets(liste_versets)
