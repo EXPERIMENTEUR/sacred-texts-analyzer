@@ -21,10 +21,10 @@ CATEGORIES_PERSONNALISEES = {
 }
 
 ZONES = {
-    "Moyen-Orient": ["Tanakh", "Coran", "Livre d'Enoch", "Apocalypse d'Esdras", "Testaments des 12 Patriarches"],
+    "Moyen-Orient": ["Tanakh", "Coran", "Livre d'Enoch", "Apocalypse d'Esdras", "Testaments des 12 Patriarches", "Apocalypse de Baruch"],
     "Mesopotamie": ["Epopee de Gilgamesh"],
     "Iran/Perse": ["Avesta"],
-    "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)"],
+    "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)", "Upanishads"],
     "Afrique": ["Evangile de Thomas"],
     "Europe": [],
     "Ameriques": [],
@@ -72,27 +72,105 @@ def nettoyer(texte):
     propre = re.sub(r"\s{2,}", " ", propre)
     return propre.strip()
 
-@st.cache_data
+FICHIER_TRADUCTIONS = "traductions_fr.json"
+
+@st.cache_resource
+def _memoire_traductions():
+    import os
+    if os.path.exists(FICHIER_TRADUCTIONS):
+        try:
+            with open(FICHIER_TRADUCTIONS, "r", encoding="utf-8-sig") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def _sauver_traductions(memoire):
+    with open(FICHIER_TRADUCTIONS, "w", encoding="utf-8") as f:
+        json.dump(memoire, f, ensure_ascii=False)
+
+ERREUR_TRADUCTION = {"detail": ""}
+
+def _cle_deepl():
+    import os
+    return os.environ.get("DEEPL_API_KEY", "").strip()
+
+def _traduire_deepl(texte, cle):
+    import requests
+    url = "https://api-free.deepl.com/v2/translate" if cle.endswith(":fx") else "https://api.deepl.com/v2/translate"
+    for attente in (0, 3, 10):
+        time.sleep(attente)
+        try:
+            r = requests.post(url, headers={"Authorization": "DeepL-Auth-Key " + cle},
+                              json={"text": [texte], "source_lang": "EN", "target_lang": "FR"}, timeout=30)
+            if r.status_code == 200:
+                return r.json()["translations"][0]["text"]
+            if r.status_code == 456:
+                ERREUR_TRADUCTION["detail"] = "quota DeepL du mois epuise (code 456)"
+                return None
+            if r.status_code in (401, 403):
+                ERREUR_TRADUCTION["detail"] = "cle DeepL refusee (code %d)" % r.status_code
+                return None
+            ERREUR_TRADUCTION["detail"] = "DeepL a repondu le code %d" % r.status_code
+        except Exception as e:
+            ERREUR_TRADUCTION["detail"] = "DeepL injoignable : %s" % e
+    return None
+
+def _traduire_google(texte):
+    for attente in (0, 5, 20):
+        time.sleep(attente)
+        try:
+            fr = GoogleTranslator(source="en", target="fr").translate(texte)
+            if fr:
+                return fr
+        except Exception as e:
+            ERREUR_TRADUCTION["detail"] = "Google : %s" % e
+    return None
+
 def traduire_francais(texte):
-    try:
-        return GoogleTranslator(source="en", target="fr").translate(texte)
-    except Exception as e:
-        return f"[Erreur de traduction : {e}]"
+    """Retourne (traduction, appel_reseau). traduction vaut None en cas d'echec : un echec n'est jamais memorise."""
+    memoire = _memoire_traductions()
+    if texte in memoire:
+        return memoire[texte], False
+    cle = _cle_deepl()
+    fr = _traduire_deepl(texte, cle) if cle else _traduire_google(texte)
+    if fr:
+        memoire[texte] = fr
+        _sauver_traductions(memoire)
+        return fr, True
+    return None, True
 
 def afficher_analyse_avec_versets(liste_versets):
     afficher_fr = st.checkbox("Afficher en français (traduction automatique)", key="trad_checkbox")
 
     st.subheader("Texte (ligne par ligne)")
+    blocage, restantes, appels = False, 0, 0
     for numero, texte_verset in liste_versets:
+        texte_affiche = texte_verset
         if afficher_fr:
-            with st.spinner(f"Traduction ligne {numero}..."):
-                texte_affiche = traduire_francais(texte_verset)
-            time.sleep(0.8)
-        else:
-            texte_affiche = texte_verset
+            if texte_verset in _memoire_traductions():
+                texte_affiche = _memoire_traductions()[texte_verset]
+            elif blocage or appels >= 60:
+                restantes += 1
+            else:
+                fr, _ = traduire_francais(texte_verset)
+                appels += 1
+                if fr is None:
+                    blocage = True
+                    restantes += 1
+                else:
+                    texte_affiche = fr
+                    time.sleep(0.2 if _cle_deepl() else 1.0)
         st.write(f"**Ligne {numero}.** {texte_affiche}")
 
     if afficher_fr:
+        st.caption("Moteur de traduction : " + ("DeepL" if _cle_deepl() else "Google (aucune cle DeepL trouvee dans DEEPL_API_KEY)"))
+        if blocage:
+            st.warning("Google limite temporairement les requetes de traduction. Attendez quelques minutes, puis cliquez sur 'Poursuivre la traduction'. Les lignes deja traduites sont memorisees. Detail : " + ERREUR_TRADUCTION["detail"])
+        elif restantes:
+            st.info(f"{restantes} ligne(s) restent en anglais : la traduction se fait par tranches de 60 lignes. Cliquez sur 'Poursuivre la traduction'.")
+        if blocage or restantes:
+            st.button("Poursuivre la traduction", key="trad_suite")
         st.caption("Traduction automatique — l'analyse ci-dessous reste basee sur le texte anglais original.")
 
     st.subheader("Entites detectees, avec numero de ligne")
@@ -120,10 +198,19 @@ def afficher_analyse_globale(texte_complet):
         with st.spinner("Traduction en cours..."):
             morceaux = [texte_complet[i:i+4500] for i in range(0, len(texte_complet), 4500)]
             morceaux_traduits = []
+            echec = False
             for m in morceaux:
-                morceaux_traduits.append(traduire_francais(m))
-                time.sleep(1.5)
+                fr, reseau = traduire_francais(m)
+                if fr is None:
+                    echec = True
+                    break
+                morceaux_traduits.append(fr)
+                if reseau:
+                    time.sleep(1.5)
+            morceaux_traduits += morceaux[len(morceaux_traduits):]
             texte_fr = " ".join(morceaux_traduits)
+            if echec:
+                st.warning("Google limite temporairement les requetes de traduction : la fin du texte reste en anglais. Reessayez dans quelques minutes (les parties deja traduites sont memorisees). Detail : " + ERREUR_TRADUCTION["detail"])
         st.write(texte_fr)
         st.caption("Traduction automatique — l'analyse ci-dessous reste basee sur le texte anglais original.")
     else:
@@ -283,6 +370,51 @@ def textes_testaments_complet():
         pass
     return resultats
 
+def textes_baruch_complet():
+    resultats = []
+    try:
+        with open("../sacred-texts-json/baruch_complete.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for livre in data["livres"]:
+            nom = "2 Baruch" if livre["title"].startswith("2") else "3 Baruch"
+            for chap in livre["chapters"]:
+                t = nettoyer(chap["text"])
+                if t.strip():
+                    resultats.append((f"{nom} - {chap['chapter']}", t))
+    except Exception:
+        pass
+    return resultats
+
+def paragraphes_upanishad(texte):
+    t = texte.replace("__NOTOC__", "")
+    t = re.sub(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", t)
+    t = re.sub(r"={2,}[^=\n]*={2,}", "", t)
+    t = re.sub(r"'{2,}", "", t)
+    return [re.sub(r"\s+", " ", p).strip() for p in re.split(r"\n\s*\n", t) if p.strip()]
+
+def charger_upanishads():
+    import os
+    dossier = "../sacred-texts-json/upanishads"
+    resultat = []
+    for nom in sorted(os.listdir(dossier)):
+        if nom.endswith(".json"):
+            with open(os.path.join(dossier, nom), "r", encoding="utf-8-sig") as f:
+                d = json.load(f)
+            paras = paragraphes_upanishad(d.get("text", ""))
+            if paras:
+                resultat.append((nom[:-5].replace("_", " "), paras))
+    return resultat
+
+def textes_upanishads_complet():
+    resultats = []
+    try:
+        for nom, paras in charger_upanishads():
+            for i, p in enumerate(paras, 1):
+                resultats.append((f"{nom} - {i}", p))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -294,6 +426,8 @@ CHARGEURS_PAR_CORPUS = {
     "Evangile de Thomas": (textes_thomas_complet, "Afrique"),
     "Avesta": (textes_avesta_complet, "Iran/Perse"),
     "Testaments des 12 Patriarches": (textes_testaments_complet, "Moyen-Orient"),
+    "Apocalypse de Baruch": (textes_baruch_complet, "Moyen-Orient"),
+    "Upanishads": (textes_upanishads_complet, "Asie du Sud"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -541,4 +675,27 @@ else:
         titre_choisi = st.selectbox("Testament", titres, key="testament_patriarche")
         testament_data = testaments[titres.index(titre_choisi)]
         liste_versets = [(c["chapter"], nettoyer(c["text"])) for c in testament_data["chapters"]]
+        afficher_analyse_avec_versets(liste_versets)
+
+    elif corpus == "Apocalypse de Baruch":
+        with open("../sacred-texts-json/baruch_complete.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        st.info("Traductions anglaises de 1913 (R. H. Charles pour le 2 Baruch syriaque, H. M. Hughes pour le 3 Baruch grec), issues d'un OCR. Le commentaire des editeurs a ete retire par heuristique : quelques fragments peuvent rester. Dans le 2 Baruch, le texte est decoupe en blocs (titres de sections imprimes), pas en 87 chapitres.")
+
+        livres = data["livres"]
+        titres = [l["title"] for l in livres]
+        titre_choisi = st.selectbox("Livre", titres, key="baruch_livre")
+        livre_data = livres[titres.index(titre_choisi)]
+        liste_versets = [(str(c["chapter"]), nettoyer(c["text"])) for c in livre_data["chapters"]]
+        afficher_analyse_avec_versets(liste_versets)
+
+    elif corpus == "Upanishads":
+        st.info("Traductions anglaises de Max Muller (Sacred Books of the East, 1879 et 1884). Six textes viennent de Wikisource, cinq (Kaushitaki, Taittiriya, Brihadaranyaka, Svetasvatara, Maitrayana) d'un OCR dont les signes diacritiques sont abimes. Les notes de bas de page de Muller sont dans les fichiers, separees du texte. Les Upanishads ne sont pas tous presents : voir le depot de donnees.")
+
+        upanishads = charger_upanishads()
+        noms = [n for n, _ in upanishads]
+        nom_choisi = st.selectbox("Upanishad", noms, key="upanishad_choisie")
+        paras = dict(upanishads)[nom_choisi]
+        liste_versets = [(i + 1, p) for i, p in enumerate(paras)]
         afficher_analyse_avec_versets(liste_versets)
