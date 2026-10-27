@@ -22,7 +22,7 @@ CATEGORIES_PERSONNALISEES = {
 
 ZONES = {
     "Moyen-Orient": ["Tanakh", "Coran", "Livre d'Enoch", "Apocalypse d'Esdras", "Testaments des 12 Patriarches", "Apocalypse de Baruch"],
-    "Mesopotamie": ["Epopee de Gilgamesh"],
+    "Mesopotamie": ["Epopee de Gilgamesh", "Enuma Elish"],
     "Iran/Perse": ["Avesta"],
     "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)", "Upanishads"],
     "Afrique": ["Evangile de Thomas"],
@@ -415,6 +415,21 @@ def textes_upanishads_complet():
         pass
     return resultats
 
+def charger_enuma():
+    with open("../sacred-texts-json/enuma_elish_complete.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def textes_enuma_complet():
+    resultats = []
+    try:
+        for tab in charger_enuma()["tablets"]:
+            t = " ".join(l["text"] for l in tab["lines"] if "n" in l)
+            if t.strip():
+                resultats.append((f"Enuma Elish - Tablette {tab['tablet']}", nettoyer(t)))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -428,6 +443,7 @@ CHARGEURS_PAR_CORPUS = {
     "Testaments des 12 Patriarches": (textes_testaments_complet, "Moyen-Orient"),
     "Apocalypse de Baruch": (textes_baruch_complet, "Moyen-Orient"),
     "Upanishads": (textes_upanishads_complet, "Asie du Sud"),
+    "Enuma Elish": (textes_enuma_complet, "Mesopotamie"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -698,4 +714,24 @@ else:
         nom_choisi = st.selectbox("Upanishad", noms, key="upanishad_choisie")
         paras = dict(upanishads)[nom_choisi]
         liste_versets = [(i + 1, p) for i, p in enumerate(paras)]
+        afficher_analyse_avec_versets(liste_versets)
+
+
+    elif corpus == "Enuma Elish":
+        data = charger_enuma()
+        st.info("Traduction anglaise ancienne (British Museum, 1921, domaine public), tres lacunaire. Seuls les vers numerotes sont analyses ; les resumes de l'editeur moderne, les lacunes signalees et les notes sont affiches a part. Les crochets [ ] sont des restitutions.")
+
+        tablettes = data["tablets"]
+        titres = [t["title"] for t in tablettes]
+        titre_choisi = st.selectbox("Tablette", titres, key="enuma_tablette")
+        tab = tablettes[titres.index(titre_choisi)]
+        hors_texte = [l["text"] for l in tab["lines"] if "n" not in l and l.get("kind") != "titre"]
+        notes = list(tab.get("notes", [])) + [n for l in tab["lines"] for n in l.get("notes", [])]
+        if hors_texte or notes:
+            with st.expander("Lacunes, resumes de l'editeur et notes (hors texte antique)"):
+                for h in hors_texte:
+                    st.markdown("- " + h)
+                for n in notes:
+                    st.markdown("- *note :* " + n)
+        liste_versets = [(str(l["n"]), nettoyer(l["text"])) for l in tab["lines"] if "n" in l]
         afficher_analyse_avec_versets(liste_versets)
