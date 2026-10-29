@@ -22,7 +22,7 @@ CATEGORIES_PERSONNALISEES = {
 
 ZONES = {
     "Moyen-Orient": ["Tanakh", "Coran", "Livre d'Enoch", "Apocalypse d'Esdras", "Testaments des 12 Patriarches", "Apocalypse de Baruch"],
-    "Mesopotamie": ["Epopee de Gilgamesh", "Enuma Elish"],
+    "Mesopotamie": ["Epopee de Gilgamesh", "Enuma Elish", "Atrahasis"],
     "Iran/Perse": ["Avesta"],
     "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)", "Upanishads"],
     "Afrique": ["Evangile de Thomas"],
@@ -430,6 +430,24 @@ def textes_enuma_complet():
         pass
     return resultats
 
+def charger_atrahasis():
+    with open("../sacred-texts-json/atrahasis_complete.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def vers_atrahasis(section):
+    return [e for e in section["entries"] if e.get("kind") != "colophon" and re.search(r"[A-Za-z]{2}", e["text"])]
+
+def textes_atrahasis_complet():
+    resultats = []
+    try:
+        for sec in charger_atrahasis()["sections"]:
+            t = " ".join(e["text"] for e in vers_atrahasis(sec))
+            if t.strip():
+                resultats.append((f"Atrahasis - {sec['id']}", nettoyer(t)))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -444,6 +462,7 @@ CHARGEURS_PAR_CORPUS = {
     "Apocalypse de Baruch": (textes_baruch_complet, "Moyen-Orient"),
     "Upanishads": (textes_upanishads_complet, "Asie du Sud"),
     "Enuma Elish": (textes_enuma_complet, "Mesopotamie"),
+    "Atrahasis": (textes_atrahasis_complet, "Mesopotamie"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -734,4 +753,21 @@ else:
                 for n in notes:
                     st.markdown("- *note :* " + n)
         liste_versets = [(str(l["n"]), nettoyer(l["text"])) for l in tab["lines"] if "n" in l]
+        afficher_analyse_avec_versets(liste_versets)
+
+
+    elif corpus == "Atrahasis":
+        data = charger_atrahasis()
+        st.info("Fragments d'Atrahasis dans la traduction anglaise de A. T. Clay (1922, domaine public), tres incomplets et depasses. Les traductions modernes completes sont sous droit d'auteur et ne sont pas incluses. Texte issu d'un OCR ; les points de suspension marquent les lacunes, les crochets [ ] des restitutions. Les notes de Clay sont exclues.")
+
+        sections = data["sections"]
+        titres = [f"{sec['id']} - {sec['title']}" for sec in sections]
+        titre_choisi = st.selectbox("Version", titres, key="atrahasis_section")
+        sec = sections[titres.index(titre_choisi)]
+        colophon = [e["text"] for e in sec["entries"] if e.get("kind") == "colophon"]
+        if colophon:
+            with st.expander("Colophon (mentions de scribe, hors texte)"):
+                for c in colophon:
+                    st.markdown("- " + c)
+        liste_versets = [(str(i + 1), nettoyer(e["text"])) for i, e in enumerate(vers_atrahasis(sec))]
         afficher_analyse_avec_versets(liste_versets)
