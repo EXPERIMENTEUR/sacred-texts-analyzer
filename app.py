@@ -27,7 +27,7 @@ ZONES = {
     "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)", "Upanishads"],
     "Afrique": ["Evangile de Thomas"],
     "Europe": ["Edda poetique"],
-    "Ameriques": [],
+    "Ameriques": ["Popol Vuh"],
     "Oceanie": []
 }
 
@@ -468,6 +468,31 @@ def textes_edda_complet():
         pass
     return resultats
 
+def charger_popol():
+    with open("../sacred-texts-json/popol_vuh_complete.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def chapitres_popol(data):
+    res = []
+    for pt in data["parts"]:
+        for ch in pt["chapters"]:
+            if ch["paragraphs"]:
+                if pt["part"] == 0:
+                    nom = "Preambule"
+                else:
+                    nom = f"Partie {pt['part']} - chapitre {ch['chapter']}"
+                res.append((nom, ch["paragraphs"]))
+    return res
+
+def textes_popol_complet():
+    resultats = []
+    try:
+        for nom, paras in chapitres_popol(charger_popol()):
+            resultats.append((f"Popol Vuh - {nom}", nettoyer(" ".join(paras))))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -484,6 +509,7 @@ CHARGEURS_PAR_CORPUS = {
     "Enuma Elish": (textes_enuma_complet, "Mesopotamie"),
     "Atrahasis": (textes_atrahasis_complet, "Mesopotamie"),
     "Edda poetique": (textes_edda_complet, "Europe"),
+    "Popol Vuh": (textes_popol_complet, "Ameriques"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -813,4 +839,16 @@ else:
             else:
                 etiquette = f"strophe {k}"
             liste_versets.append((etiquette, nettoyer(i["text"])))
+        afficher_analyse_avec_versets(liste_versets)
+
+
+    elif corpus == "Popol Vuh":
+        data = charger_popol()
+        st.info("Traduction francaise de Brasseur de Bourbourg (1861, domaine public), faite sur le texte quiche. Elle est litterale mais critiquee par les specialistes, et issue d'un OCR : erreurs possibles. Le texte quiche, les notes et les commentaires de Brasseur sont exclus ; les parentheses sont des ajouts du traducteur. Les traductions modernes sont sous droit d'auteur et ne sont pas incluses. Le texte est en francais : les analyses automatiques (entites, etc.) sont faites avec le modele anglais et seront donc moins fiables.")
+
+        chapitres = chapitres_popol(data)
+        noms = [n for n, _ in chapitres]
+        nom_choisi = st.selectbox("Chapitre", noms, key="popol_chapitre")
+        paras = dict(chapitres)[nom_choisi]
+        liste_versets = [(str(i + 1), nettoyer(p)) for i, p in enumerate(paras)]
         afficher_analyse_avec_versets(liste_versets)
