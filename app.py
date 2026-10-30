@@ -26,7 +26,7 @@ ZONES = {
     "Iran/Perse": ["Avesta"],
     "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)", "Upanishads"],
     "Afrique": ["Evangile de Thomas"],
-    "Europe": [],
+    "Europe": ["Edda poetique"],
     "Ameriques": [],
     "Oceanie": []
 }
@@ -448,6 +448,26 @@ def textes_atrahasis_complet():
         pass
     return resultats
 
+def charger_edda():
+    with open("../sacred-texts-json/edda_complete.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+TYPES_TEXTE_EDDA = ("stanza", "verse", "prose", "locuteur")
+
+def items_edda(poeme):
+    return [i for i in poeme["items"] if i["kind"] in TYPES_TEXTE_EDDA]
+
+def textes_edda_complet():
+    resultats = []
+    try:
+        for p in charger_edda()["poems"]:
+            t = " ".join(i["text"] for i in items_edda(p))
+            if t.strip():
+                resultats.append((f"Edda - {p['id']}", nettoyer(t)))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -463,6 +483,7 @@ CHARGEURS_PAR_CORPUS = {
     "Upanishads": (textes_upanishads_complet, "Asie du Sud"),
     "Enuma Elish": (textes_enuma_complet, "Mesopotamie"),
     "Atrahasis": (textes_atrahasis_complet, "Mesopotamie"),
+    "Edda poetique": (textes_edda_complet, "Europe"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -770,4 +791,26 @@ else:
                 for c in colophon:
                     st.markdown("- " + c)
         liste_versets = [(str(i + 1), nettoyer(e["text"])) for i, e in enumerate(vers_atrahasis(sec))]
+        afficher_analyse_avec_versets(liste_versets)
+
+
+    elif corpus == "Edda poetique":
+        data = charger_edda()
+        st.info("Traduction anglaise de H. A. Bellows (1923, domaine public) d'apres le Codex Regius. Les traductions modernes sont sous droit d'auteur et ne sont pas incluses. Les introductions et notes de Bellows sont exclues ; les passages en prose sont ceux du compilateur medieval. Les parentheses sont des interpolations signalees, '. . . .' des lacunes du manuscrit.")
+
+        poemes = data["poems"]
+        titres = [f"{p['group']} - {p['id']}" for p in poemes]
+        titre_choisi = st.selectbox("Poeme", titres, key="edda_poeme")
+        poeme = poemes[titres.index(titre_choisi)]
+        liste_versets = []
+        for k, i in enumerate(items_edda(poeme), 1):
+            if i["kind"] == "stanza":
+                etiquette = str(i["n"])
+            elif i["kind"] == "locuteur":
+                etiquette = f"voix {k}"
+            elif i["kind"] == "prose":
+                etiquette = f"prose {k}"
+            else:
+                etiquette = f"strophe {k}"
+            liste_versets.append((etiquette, nettoyer(i["text"])))
         afficher_analyse_avec_versets(liste_versets)
