@@ -27,7 +27,8 @@ ZONES = {
     "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)", "Upanishads"],
     "Afrique": ["Evangile de Thomas"],
     "Europe": ["Edda poetique"],
-    "Ameriques": ["Popol Vuh"],
+    "Amerique du Nord": ["Popol Vuh"],
+    "Amerique du Sud": [],
     "Oceanie": []
 }
 
@@ -509,7 +510,7 @@ CHARGEURS_PAR_CORPUS = {
     "Enuma Elish": (textes_enuma_complet, "Mesopotamie"),
     "Atrahasis": (textes_atrahasis_complet, "Mesopotamie"),
     "Edda poetique": (textes_edda_complet, "Europe"),
-    "Popol Vuh": (textes_popol_complet, "Ameriques"),
+    "Popol Vuh": (textes_popol_complet, "Amerique du Nord"),
 }
 
 @st.cache_data(show_spinner=False)
