@@ -21,7 +21,7 @@ CATEGORIES_PERSONNALISEES = {
 }
 
 ZONES = {
-    "Moyen-Orient": ["Tanakh", "Coran", "Livre d'Enoch", "Apocalypse d'Esdras", "Testaments des 12 Patriarches", "Apocalypse de Baruch"],
+    "Moyen-Orient": ["Tanakh", "Coran", "Livre d'Enoch", "Apocalypse d'Esdras", "Testaments des 12 Patriarches", "Apocalypse de Baruch", "Septante (Brenton)"],
     "Mesopotamie": ["Epopee de Gilgamesh", "Enuma Elish", "Atrahasis"],
     "Iran/Perse": ["Avesta"],
     "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)", "Upanishads"],
@@ -494,6 +494,22 @@ def textes_popol_complet():
         pass
     return resultats
 
+def charger_septante():
+    with open("../sacred-texts-json/septuagint_complete.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def textes_septante_complet():
+    resultats = []
+    try:
+        for livre in charger_septante()["books"]:
+            for chap in livre["chapters"]:
+                t = " ".join(v["text"] for v in chap["verses"])
+                if t.strip():
+                    resultats.append((f"Septante - {livre['title']} {chap['chapter']}", nettoyer(t)))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -511,6 +527,7 @@ CHARGEURS_PAR_CORPUS = {
     "Atrahasis": (textes_atrahasis_complet, "Mesopotamie"),
     "Edda poetique": (textes_edda_complet, "Europe"),
     "Popol Vuh": (textes_popol_complet, "Amerique du Nord"),
+    "Septante (Brenton)": (textes_septante_complet, "Moyen-Orient"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -852,4 +869,20 @@ else:
         nom_choisi = st.selectbox("Chapitre", noms, key="popol_chapitre")
         paras = dict(chapitres)[nom_choisi]
         liste_versets = [(str(i + 1), nettoyer(p)) for i, p in enumerate(paras)]
+        afficher_analyse_avec_versets(liste_versets)
+
+
+    elif corpus == "Septante (Brenton)":
+        data = charger_septante()
+        st.info("Traduction anglaise de L. C. L. Brenton (1851, domaine public) de la Septante, version grecque de la Bible hebraique faite a Alexandrie, apocryphes compris. Les traductions modernes sont sous droit d'auteur et ne sont pas incluses. Les mots en italique de Brenton, les notes et les renvois sont retires. Les psaumes suivent la numerotation de la Septante, differente de l'hebreu.")
+
+        livres = data["books"]
+        titres = [f"{l['group']} - {l['title']}" for l in livres]
+        titre_choisi = st.selectbox("Livre", titres, key="septante_livre")
+        livre = livres[titres.index(titre_choisi)]
+        chapitres = livre["chapters"]
+        numeros = [str(c["chapter"]) for c in chapitres]
+        num_choisi = st.selectbox("Chapitre", numeros, key=f"septante_chapitre_{livre['code']}")
+        chap = chapitres[numeros.index(num_choisi)]
+        liste_versets = [(v["v"], nettoyer(v["text"])) for v in chap["verses"]]
         afficher_analyse_avec_versets(liste_versets)
