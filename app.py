@@ -29,7 +29,7 @@ ZONES = {
     "Europe": ["Edda poetique"],
     "Amerique du Nord": ["Popol Vuh"],
     "Amerique du Sud": ["Huarochiri (Avila)"],
-    "Oceanie": []
+    "Oceanie": ["Mythologie maorie (Grey)"]
 }
 
 CORPUS_VERS_ZONE = {}
@@ -546,6 +546,21 @@ def textes_huarochiri_complet():
         pass
     return resultats
 
+def charger_grey():
+    with open("../sacred-texts-json/grey_polynesian_complete.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def textes_grey_complet():
+    resultats = []
+    try:
+        for lg in charger_grey()["legends"]:
+            t = " ".join(p["text"] for p in lg["paragraphs"])
+            if t.strip():
+                resultats.append((f"Grey - {lg['title']}", nettoyer(t)))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -566,6 +581,7 @@ CHARGEURS_PAR_CORPUS = {
     "Septante (Brenton)": (textes_septante_complet, "Moyen-Orient"),
     "Pistis Sophia": (textes_pistis_complet, "Afrique"),
     "Huarochiri (Avila)": (textes_huarochiri_complet, "Amerique du Sud"),
+    "Mythologie maorie (Grey)": (textes_grey_complet, "Oceanie"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -959,3 +975,26 @@ else:
             afficher_analyse_avec_versets(liste_versets)
         else:
             st.info("Ce chapitre ne contient pas de recit (seulement des commentaires ou des notes d'edition).")
+
+
+    elif corpus == "Mythologie maorie (Grey)":
+        data = charger_grey()
+        st.warning("Version anglaise de George Grey (1855, domaine public), PAS les recits maoris d'origine. Grey a compile des manuscrits maoris (surtout ceux de Te Rangikaheke, qu'il n'a pas credite) avec des modifications, des fusions et des omissions, et l'a adaptee a un public victorien ; certaines de ses notes signalent des passages raccourcis. Les specialistes la jugent peu representative d'une region ou d'une tribu precise. Les notes de Grey sont dans un volet a part ; la preface et l'appendice musical (gammes grecques) sont exclus.")
+
+        legendes = data["legends"]
+        titres = [f"{lg['id']}. {lg['title']}" for lg in legendes]
+        titre_choisi = st.selectbox("Legende", titres, key="grey_legende")
+        lg = legendes[titres.index(titre_choisi)]
+        if lg["subtitle"]:
+            st.caption(lg["subtitle"])
+        liste_versets = []
+        for p in lg["paragraphs"]:
+            if p["kind"] == "chant":
+                liste_versets.append((f"{p['n']} (chant, p. {p['pages']})", nettoyer(p["text"])))
+            else:
+                liste_versets.append((f"{p['n']} (p. {p['pages']})", nettoyer(p["text"])))
+        afficher_analyse_avec_versets(liste_versets)
+        if lg["notes"]:
+            with st.expander(f"Notes de Grey ({len(lg['notes'])})"):
+                for nt in lg["notes"]:
+                    st.markdown(f"p. {nt['page']} : {nt['text']}")
