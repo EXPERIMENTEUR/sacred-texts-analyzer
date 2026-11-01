@@ -25,7 +25,7 @@ ZONES = {
     "Mesopotamie": ["Epopee de Gilgamesh", "Enuma Elish", "Atrahasis"],
     "Iran/Perse": ["Avesta"],
     "Asie du Sud": ["Rigveda (anglais)", "Samaveda (anglais)", "Upanishads"],
-    "Afrique": ["Evangile de Thomas"],
+    "Afrique": ["Evangile de Thomas", "Pistis Sophia"],
     "Europe": ["Edda poetique"],
     "Amerique du Nord": ["Popol Vuh"],
     "Amerique du Sud": [],
@@ -510,6 +510,27 @@ def textes_septante_complet():
         pass
     return resultats
 
+def charger_pistis():
+    with open("../sacred-texts-json/pistis_sophia_complete.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def etiquette_pistis(p):
+    f = p.get("folios")
+    if f:
+        return f"{p['n']} (f. {f[0]}-{f[-1]})" if len(f) > 1 else f"{p['n']} (f. {f[0]})"
+    return str(p["n"])
+
+def textes_pistis_complet():
+    resultats = []
+    try:
+        for doc in charger_pistis()["documents"]:
+            for p in doc["paragraphs"]:
+                if p["kind"] == "texte":
+                    resultats.append((f"Pistis Sophia - Document {doc['id']} par. {p['n']}", nettoyer(p["text"])))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -528,6 +549,7 @@ CHARGEURS_PAR_CORPUS = {
     "Edda poetique": (textes_edda_complet, "Europe"),
     "Popol Vuh": (textes_popol_complet, "Amerique du Nord"),
     "Septante (Brenton)": (textes_septante_complet, "Moyen-Orient"),
+    "Pistis Sophia": (textes_pistis_complet, "Afrique"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -885,4 +907,16 @@ else:
         num_choisi = st.selectbox("Chapitre", numeros, key=f"septante_chapitre_{livre['code']}")
         chap = chapitres[numeros.index(num_choisi)]
         liste_versets = [(v["v"], nettoyer(v["text"])) for v in chap["verses"]]
+        afficher_analyse_avec_versets(liste_versets)
+
+
+    elif corpus == "Pistis Sophia":
+        data = charger_pistis()
+        st.info("Traduction anglaise litterale du copte par George Horner (1924, domaine public), codex Askew, quatre Documents. Les mots entre parentheses sont des ajouts ou variantes du traducteur. L'introduction de Legge, les index et les notes de l'editeur (lacunes, ornements) sont exclus ; les numeros de feuillets du manuscrit sont indiques entre parentheses (f. 12b). Le texte n'a pas de chapitres : il est decoupe en paragraphes. Les passages en copte translitteres (noms magiques) peuvent perturber l'analyse automatique.")
+
+        docs = data["documents"]
+        titres = [f"{d['title']} - {d['subtitle']}" if d["subtitle"] else d["title"] for d in docs]
+        titre_choisi = st.selectbox("Document", titres, key="pistis_document")
+        doc = docs[titres.index(titre_choisi)]
+        liste_versets = [(etiquette_pistis(p), nettoyer(p["text"])) for p in doc["paragraphs"] if p["kind"] == "texte"]
         afficher_analyse_avec_versets(liste_versets)
