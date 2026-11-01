@@ -28,7 +28,7 @@ ZONES = {
     "Afrique": ["Evangile de Thomas", "Pistis Sophia"],
     "Europe": ["Edda poetique"],
     "Amerique du Nord": ["Popol Vuh"],
-    "Amerique du Sud": [],
+    "Amerique du Sud": ["Huarochiri (Avila)"],
     "Oceanie": []
 }
 
@@ -531,6 +531,21 @@ def textes_pistis_complet():
         pass
     return resultats
 
+def charger_huarochiri():
+    with open("../sacred-texts-json/huarochiri_avila_complete.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def textes_huarochiri_complet():
+    resultats = []
+    try:
+        for chap in charger_huarochiri()["chapters"]:
+            t = " ".join(p["text"] for p in chap["paragraphs"] if p["kind"] == "texte")
+            if t.strip():
+                resultats.append((f"Huarochiri (Avila) - Chapitre {chap['roman']}", nettoyer(t)))
+    except Exception:
+        pass
+    return resultats
+
 CHARGEURS_PAR_CORPUS = {
     "Tanakh": (textes_tanakh_complet, "Moyen-Orient"),
     "Coran": (textes_coran_complet, "Moyen-Orient"),
@@ -550,6 +565,7 @@ CHARGEURS_PAR_CORPUS = {
     "Popol Vuh": (textes_popol_complet, "Amerique du Nord"),
     "Septante (Brenton)": (textes_septante_complet, "Moyen-Orient"),
     "Pistis Sophia": (textes_pistis_complet, "Afrique"),
+    "Huarochiri (Avila)": (textes_huarochiri_complet, "Amerique du Sud"),
 }
 
 @st.cache_data(show_spinner=False)
@@ -920,3 +936,26 @@ else:
         doc = docs[titres.index(titre_choisi)]
         liste_versets = [(etiquette_pistis(p), nettoyer(p["text"])) for p in doc["paragraphs"] if p["kind"] == "texte"]
         afficher_analyse_avec_versets(liste_versets)
+
+
+    elif corpus == "Huarochiri (Avila)":
+        data = charger_huarochiri()
+        st.warning("Ce n'est PAS le manuscrit quechua de Huarochiri : ses traductions modernes sont sous droit d'auteur et ne sont pas incluses. Il s'agit du recit de Francisco de Avila, pretre espagnol (1608), traduit par Clements Markham (1873, domaine public). Il rapporte des mythes de la region (Coniraya, Pariacaca, Huathiacuri, deluge du lama) mais les entremele de ses propres refutations theologiques. Par defaut seuls les recits sont affiches ; les commentaires d'Avila sont facultatifs, car ils ne sont pas la source. Les pages indiquees sont celles du paragraphe d'origine dans l'edition de 1873. Quelques fautes de transcription restent possibles.")
+
+        chapitres = data["chapters"]
+        titres = [f"Chapitre {c['roman']}" for c in chapitres]
+        titre_choisi = st.selectbox("Chapitre", titres, key="huarochiri_chapitre")
+        chap = chapitres[titres.index(titre_choisi)]
+        if chap["summary"]:
+            st.caption(chap["summary"])
+        avec_comm = st.checkbox("Inclure les commentaires d'Avila", value=False, key="huarochiri_comm")
+        liste_versets = []
+        for p in chap["paragraphs"]:
+            if p["kind"] == "texte":
+                liste_versets.append((f"{p['n']} (p. {p['pages']})", nettoyer(p["text"])))
+            elif p["kind"] == "commentaire_avila" and avec_comm:
+                liste_versets.append((f"{p['n']} (p. {p['pages']}, commentaire d'Avila)", nettoyer(p["text"])))
+        if liste_versets:
+            afficher_analyse_avec_versets(liste_versets)
+        else:
+            st.info("Ce chapitre ne contient pas de recit (seulement des commentaires ou des notes d'edition).")
