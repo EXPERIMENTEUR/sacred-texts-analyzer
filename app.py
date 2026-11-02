@@ -397,6 +397,14 @@ def _etiquette_verset(p):
         return f"{p['n']}-{p['n_fin']}"
     return str(p["n"])
 
+def charger_yashts():
+    with open("../sacred-texts-json/yashts_darmesteter.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def _yashts_dispo():
+    import os
+    return os.path.exists("../sacred-texts-json/yashts_darmesteter.json")
+
 def textes_avesta_complet():
     resultats = []
     try:
@@ -412,10 +420,16 @@ def textes_avesta_complet():
                 t = nettoyer(sec["text"])
                 if t.strip():
                     resultats.append((f"Avesta - Vendidad - Fargard {sec['fargard']}", t))
-        for sec in data["yashts"]:
-            t = nettoyer(sec["text"])
-            if t.strip():
-                resultats.append((f"Avesta - Yasht {sec['yasht_numero']} {sec['yasht_nom'].title()}", t))
+        try:
+            for y in charger_yashts()["yashts"]:
+                t = nettoyer(" ".join(p["text"] for p in y["paragraphs"] if p["kind"] in ("texte", "formule")))
+                if t.strip():
+                    resultats.append((f"Avesta - Yasht {y['id']} {y['titre']}", t))
+        except Exception:
+            for sec in data["yashts"]:
+                t = nettoyer(sec["text"])
+                if t.strip():
+                    resultats.append((f"Avesta - Yasht {sec['yasht_numero']} {sec['yasht_nom'].title()}", t))
         for i, sec in enumerate(data["yasna"], start=1):
             t = nettoyer(sec["text"])
             if t.strip():
@@ -919,6 +933,28 @@ else:
             if fg["notes"]:
                 with st.expander(f"Notes de Darmesteter ({len(fg['notes'])}) - exclues de l'analyse"):
                     for nt in fg["notes"]:
+                        st.markdown(f"{nt['ref']} {nt['text']}")
+        elif partie == "Yashts" and _yashts_dispo():
+            ya = charger_yashts()["yashts"]
+            st.info("Yashts : traduction de James Darmesteter (1883, Sacred Books of the East vol. 23), refaite depuis l'edition HTML. Les resumes du traducteur et ses notes de bas de page sont dans des volets a part, exclus de l'analyse. Les formules d'ouverture sont gardees (etiquette 'formule'). Les Sirozahs, Nyayishes et Gahs ne sont pas encore inclus.")
+            titres_y = [f"{y['titre']}" for y in ya]
+            choix_y = st.selectbox("Yasht", titres_y, key="yasht_darmesteter")
+            y = ya[titres_y.index(choix_y)]
+            liste_versets = []
+            for p in y["paragraphs"]:
+                if p["kind"] == "texte":
+                    liste_versets.append((_etiquette_verset(p), nettoyer(p["text"])))
+                elif p["kind"] == "formule":
+                    liste_versets.append(("formule", nettoyer(p["text"])))
+            afficher_analyse_avec_versets(liste_versets)
+            intro_y = [p["text"] for p in y["paragraphs"] if p["kind"] == "intro_traducteur"]
+            if intro_y:
+                with st.expander(f"Resume du traducteur ({len(intro_y)}) - exclu de l'analyse"):
+                    for t in intro_y:
+                        st.markdown(t)
+            if y["notes"]:
+                with st.expander(f"Notes de Darmesteter ({len(y['notes'])}) - exclues de l'analyse"):
+                    for nt in y["notes"]:
                         st.markdown(f"{nt['ref']} {nt['text']}")
         else:
             titre_choisi = st.selectbox("Section", titres, key=f"section_avesta_{partie}")
