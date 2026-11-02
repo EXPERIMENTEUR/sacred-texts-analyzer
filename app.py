@@ -64,8 +64,40 @@ def charger_coran():
         data = json.load(f)
     return data["quran"]
 
+_RX_I = re.compile(r"<(/?)i(?=[\s>])", re.I)
+
+def _separer_notes(texte):
+    """Retire les notes <i class="footnote">...</i> en comptant les <i> imbriques.
+    Retourne (texte sans notes, liste des notes en HTML)."""
+    debut = '<i class="footnote">'
+    sortie, notes, i = [], [], 0
+    while True:
+        j = texte.find(debut, i)
+        if j < 0:
+            sortie.append(texte[i:])
+            break
+        sortie.append(texte[i:j])
+        k = j + len(debut)
+        prof = 1
+        fin_note = len(texte)
+        while prof > 0:
+            m = _RX_I.search(texte, k)
+            if not m:
+                k = len(texte)
+                break
+            prof += -1 if m.group(1) else 1
+            if prof == 0:
+                fin_note = m.start()
+            fin = texte.find(">", m.end())
+            k = len(texte) if fin < 0 else fin + 1
+        notes.append(texte[j + len(debut):fin_note])
+        i = k
+    return "".join(sortie), notes
+
 def nettoyer(texte):
-    propre = re.sub(r"<i class=\"footnote\">.*?</i>", "", texte)
+    propre, _ = _separer_notes(texte)
+    propre = re.sub(r'<sup class="footnote-marker">.*?</sup>', "", propre)
+    propre = re.sub(r"<br\s*/?>|</span>", " ", propre, flags=re.I)
     propre = re.sub(r"<[^>]+>", "", propre)
     propre = re.sub(r"={2,}[^=]*={2,}", "", propre)
     propre = re.sub(r"[⌈⌉]", "", propre)
@@ -310,13 +342,31 @@ def textes_esdras_complet():
         pass
     return resultats
 
+_RX_TITRE_GILG = re.compile(r"^(THE [A-Z ]+TABLET\.?|Column [IVX]+ ?\.?|[IVX]+\.?|\d+\.?)$")
+
+def _separer_gilgamesh(texte):
+    """Classe les paragraphes : texte / notes d'editeur '( ... )' / titres.
+    Retourne (texte, notes, titres)."""
+    corps, notes, titres = [], [], []
+    for p in re.split(r"\n\s*\n", texte):
+        p = re.sub(r"\s+", " ", p).strip()
+        if not p:
+            continue
+        if p.startswith("( "):
+            notes.append(p)
+        elif _RX_TITRE_GILG.match(p) or (len(p.split()) <= 6 and p.isupper()):
+            titres.append(p)
+        else:
+            corps.append(p)
+    return "\n\n".join(corps), notes, titres
+
 def textes_gilgamesh_complet():
     resultats = []
     try:
         with open("../sacred-texts-json/gilgamesh_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
         for tablette in data["tablets"]:
-            texte_t = nettoyer(tablette["text"])
+            texte_t = nettoyer(_separer_gilgamesh(tablette["text"])[0])
             if texte_t.strip():
                 resultats.append((f"Gilgamesh - Tablette {tablette['tablet']}", texte_t))
     except Exception:
@@ -336,15 +386,32 @@ def textes_thomas_complet():
         pass
     return resultats
 
+def charger_vendidad():
+    with open("../sacred-texts-json/vendidad_darmesteter.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def _etiquette_verset(p):
+    if p.get("n") is None:
+        return "-"
+    if p.get("n_fin") and p["n_fin"] != p["n"]:
+        return f"{p['n']}-{p['n_fin']}"
+    return str(p["n"])
+
 def textes_avesta_complet():
     resultats = []
     try:
         with open("../sacred-texts-json/avesta_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
-        for sec in data["vendidad"]:
-            t = nettoyer(sec["text"])
-            if t.strip():
-                resultats.append((f"Avesta - Vendidad - Fargard {sec['fargard']}", t))
+        try:
+            for fg in charger_vendidad()["fargards"]:
+                t = nettoyer(" ".join(p["text"] for p in fg["paragraphs"] if p["kind"] == "texte"))
+                if t.strip():
+                    resultats.append((f"Avesta - Vendidad - Fargard {fg['fargard']}", t))
+        except Exception:
+            for sec in data["vendidad"]:
+                t = nettoyer(sec["text"])
+                if t.strip():
+                    resultats.append((f"Avesta - Vendidad - Fargard {sec['fargard']}", t))
         for sec in data["yashts"]:
             t = nettoyer(sec["text"])
             if t.strip():
@@ -702,6 +769,16 @@ else:
         versets = data["text"][chapitre - 1]
         liste_versets = [(i + 1, nettoyer(v)) for i, v in enumerate(versets)]
         afficher_analyse_avec_versets(liste_versets)
+        notes_ch = []
+        for i, v in enumerate(versets):
+            for n in _separer_notes(v)[1]:
+                t = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", n)).strip()
+                if t:
+                    notes_ch.append((i + 1, t))
+        if notes_ch:
+            with st.expander(f"Notes de la traduction JPS ({len(notes_ch)}) - exclues de l'analyse"):
+                for num, t in notes_ch:
+                    st.markdown(f"Ligne {num} : {t}")
 
     elif corpus == "Coran":
         versets_coran = charger_coran()
@@ -780,8 +857,13 @@ else:
 
         index_choisi = titres_tablettes.index(titre_choisi)
         tablette_data = tablettes_gilgamesh[index_choisi]
-        texte_complet = nettoyer(tablette_data["text"])
+        corps_g, notes_g, titres_g = _separer_gilgamesh(tablette_data["text"])
+        texte_complet = nettoyer(corps_g)
         afficher_analyse_globale(texte_complet)
+        if notes_g:
+            with st.expander(f"Notes de l'editeur ({len(notes_g)}) - exclues de l'analyse"):
+                for nt in notes_g:
+                    st.markdown(nt)
 
     elif corpus == "Evangile de Thomas":
         with open("../sacred-texts-json/thomas_complete.json", "r", encoding="utf-8") as f:
@@ -814,9 +896,34 @@ else:
             sections = data["yasna"]
             titres = [f"Bloc {i} (en-tete Yasna {x['yasna_entete_courante']})" for i, x in enumerate(sections, start=1)]
 
-        titre_choisi = st.selectbox("Section", titres, key=f"section_avesta_{partie}")
-        section_data = sections[titres.index(titre_choisi)]
-        afficher_analyse_globale(nettoyer(section_data["text"]))
+        if partie == "Vendidad":
+            try:
+                vend = charger_vendidad()
+            except Exception:
+                vend = None
+        else:
+            vend = None
+        if vend is not None:
+            st.info("Vendidad : traduction de James Darmesteter (1880, Sacred Books of the East vol. 4), refaite depuis l'edition HTML. Les resumes du traducteur et ses notes de bas de page sont dans des volets a part, exclus de l'analyse.")
+            fgs = vend["fargards"]
+            titres_v = [f"Fargard {x['fargard']}" for x in fgs]
+            choix = st.selectbox("Fargard", titres_v, key="fargard_vendidad")
+            fg = fgs[titres_v.index(choix)]
+            liste_versets = [(_etiquette_verset(p), nettoyer(p["text"])) for p in fg["paragraphs"] if p["kind"] == "texte"]
+            afficher_analyse_avec_versets(liste_versets)
+            intro = [p["text"] for p in fg["paragraphs"] if p["kind"] != "texte"]
+            if intro:
+                with st.expander(f"Resume du traducteur ({len(intro)}) - exclu de l'analyse"):
+                    for t in intro:
+                        st.markdown(t)
+            if fg["notes"]:
+                with st.expander(f"Notes de Darmesteter ({len(fg['notes'])}) - exclues de l'analyse"):
+                    for nt in fg["notes"]:
+                        st.markdown(f"{nt['ref']} {nt['text']}")
+        else:
+            titre_choisi = st.selectbox("Section", titres, key=f"section_avesta_{partie}")
+            section_data = sections[titres.index(titre_choisi)]
+            afficher_analyse_globale(nettoyer(section_data["text"]))
 
     elif corpus == "Testaments des 12 Patriarches":
         with open("../sacred-texts-json/testaments_12_patriarches_complete.json", "r", encoding="utf-8") as f:
