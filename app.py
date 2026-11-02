@@ -405,6 +405,22 @@ def _yashts_dispo():
     import os
     return os.path.exists("../sacred-texts-json/yashts_darmesteter.json")
 
+PARTIES_MILLS = ["Gathas", "Yasna", "Visparad", "Afrinagan", "Gahs", "Fragments"]
+
+def charger_mills():
+    with open("../sacred-texts-json/mills_avesta.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def _mills_dispo():
+    import os
+    return os.path.exists("../sacred-texts-json/mills_avesta.json")
+
+def _etiquette_mills(p):
+    e = _etiquette_verset(p)
+    if p.get("n_imprime"):
+        e += f" [imprime {p['n_imprime']}]"
+    return e
+
 def textes_avesta_complet():
     resultats = []
     try:
@@ -430,10 +446,16 @@ def textes_avesta_complet():
                 t = nettoyer(sec["text"])
                 if t.strip():
                     resultats.append((f"Avesta - Yasht {sec['yasht_numero']} {sec['yasht_nom'].title()}", t))
-        for i, sec in enumerate(data["yasna"], start=1):
-            t = nettoyer(sec["text"])
-            if t.strip():
-                resultats.append((f"Avesta - Yasna - Bloc {i} (en-tete {sec['yasna_entete_courante']})", t))
+        try:
+            for sec in charger_mills()["sections"]:
+                t = nettoyer(" ".join(p["text"] for p in sec["paragraphs"] if p["kind"] == "texte"))
+                if t.strip():
+                    resultats.append((f"Avesta - {sec['groupe']} - {sec['titre']}", t))
+        except Exception:
+            for i, sec in enumerate(data["yasna"], start=1):
+                t = nettoyer(sec["text"])
+                if t.strip():
+                    resultats.append((f"Avesta - Yasna - Bloc {i} (en-tete {sec['yasna_entete_courante']})", t))
     except Exception:
         pass
     return resultats
@@ -899,7 +921,7 @@ else:
 
         st.warning("Texte issu d'un OCR de scans du 19e siecle. Chaque section commence par une introduction ou un resume redige par le traducteur, et les notes de bas de page sont melangees au texte : les entites detectees melent donc texte avestique et commentaire. Decoupage approximatif (a une page pres).")
 
-        partie = st.selectbox("Partie", ["Vendidad", "Yashts", "Yasna"], key="partie_avesta")
+        partie = st.selectbox("Partie", (["Vendidad", "Yashts", "Gathas", "Yasna", "Visparad", "Afrinagan", "Gahs", "Fragments"] if _mills_dispo() else ["Vendidad", "Yashts", "Yasna"]), key="partie_avesta")
         if partie == "Vendidad":
             sections = data["vendidad"]
             titres = [f"Fargard {x['fargard']}" for x in sections]
@@ -933,6 +955,28 @@ else:
             if fg["notes"]:
                 with st.expander(f"Notes de Darmesteter ({len(fg['notes'])}) - exclues de l'analyse"):
                     for nt in fg["notes"]:
+                        st.markdown(f"{nt['ref']} {nt['text']}")
+        elif partie in PARTIES_MILLS and _mills_dispo():
+            secs = [x for x in charger_mills()["sections"] if x["groupe"] == partie]
+            st.info("Traduction de L. H. Mills (1887, Sacred Books of the East vol. 31). Attention : Mills met entre parentheses ses propres ajouts d'interpretation, qui restent dans le texte analyse. Ses introductions et resumes, les indications de locuteurs et ses notes de bas de page sont dans des volets a part, exclus de l'analyse.")
+            titres_m = [x["titre"] for x in secs]
+            choix_m = st.selectbox("Section", titres_m, key=f"mills_{partie}")
+            sec_m = secs[titres_m.index(choix_m)]
+            liste_versets = [(_etiquette_mills(p), nettoyer(p["text"])) for p in sec_m["paragraphs"] if p["kind"] == "texte"]
+            afficher_analyse_avec_versets(liste_versets)
+            intro_m = [p["text"] for p in sec_m["paragraphs"] if p["kind"] == "intro_traducteur"]
+            if intro_m:
+                with st.expander(f"Introduction et resume de Mills ({len(intro_m)}) - exclus de l'analyse"):
+                    for t in intro_m:
+                        st.markdown(t)
+            indic = [p["text"] for p in sec_m["paragraphs"] if p["kind"] == "indication"]
+            if indic:
+                with st.expander(f"Indications de locuteurs et sous-titres ({len(indic)}) - exclues de l'analyse"):
+                    for t in indic:
+                        st.markdown(f"- {t}")
+            if sec_m["notes"]:
+                with st.expander(f"Notes de Mills ({len(sec_m['notes'])}) - exclues de l'analyse"):
+                    for nt in sec_m["notes"]:
                         st.markdown(f"{nt['ref']} {nt['text']}")
         elif partie == "Yashts" and _yashts_dispo():
             ya = charger_yashts()["yashts"]
