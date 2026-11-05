@@ -505,9 +505,21 @@ def charger_upanishads():
             with open(os.path.join(dossier, nom), "r", encoding="utf-8-sig") as f:
                 d = json.load(f)
             paras = paragraphes_upanishad(d.get("text", ""))
+            exclus = set(d.get("commentaire_traducteur", [])) | set(d.get("bruit", []))
+            paras = [p for p in paras if p not in exclus]
             if paras:
                 resultat.append((nom[:-5].replace("_", " "), paras))
     return resultat
+
+def extras_upanishad(nom_affiche):
+    import os
+    chemin = os.path.join("../sacred-texts-json/upanishads", nom_affiche.replace(" ", "_") + ".json")
+    try:
+        with open(chemin, "r", encoding="utf-8-sig") as f:
+            d = json.load(f)
+        return d.get("commentaire_traducteur", []), d.get("notes", [])
+    except Exception:
+        return [], []
 
 def textes_upanishads_complet():
     resultats = []
@@ -1040,6 +1052,16 @@ else:
         paras = dict(upanishads)[nom_choisi]
         liste_versets = [(i + 1, p) for i, p in enumerate(paras)]
         afficher_analyse_avec_versets(liste_versets)
+        com_u, notes_u = extras_upanishad(nom_choisi)
+        if com_u:
+            with st.expander(f"Commentaire de Muller repere dans le texte ({len(com_u)}) - exclu de l'analyse"):
+                for t in com_u:
+                    st.markdown(t)
+        if notes_u:
+            with st.expander(f"Notes de bas de page de Muller ({len(notes_u)}) - exclues de l'analyse"):
+                for t in notes_u:
+                    st.markdown("- " + t)
+        st.caption("Le reperage du commentaire est prudent (mots-cles et position) : du commentaire non detecte peut rester dans le texte, surtout dans les cinq textes issus d'un OCR.")
 
 
     elif corpus == "Enuma Elish":
