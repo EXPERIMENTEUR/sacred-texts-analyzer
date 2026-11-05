@@ -1046,7 +1046,7 @@ else:
         with open("../sacred-texts-json/baruch_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        st.info("Traductions anglaises de 1913 (R. H. Charles pour le 2 Baruch syriaque, H. M. Hughes pour le 3 Baruch grec), issues d'un OCR. Le commentaire des editeurs a ete retire par heuristique : quelques fragments peuvent rester. Dans le 2 Baruch, le texte est decoupe en blocs (titres de sections imprimes), pas en 87 chapitres.")
+        st.info("2 Baruch : traduction de R. H. Charles (1913), texte propre du Wesley Center (NNU), sans notes, 85 chapitres (la page source s'arrete a 85:2 : les chapitres 86-87 manquent). Les crochets sont ceux de Charles (interpolations supposees). 3 Baruch : traduction de H. M. Hughes (1913) issue d'un OCR ; le commentaire des editeurs a ete retire par heuristique, quelques fragments peuvent rester.")
 
         livres = data["livres"]
         titres = [l["title"] for l in livres]
