@@ -412,6 +412,24 @@ def _yashts_dispo():
     import os
     return os.path.exists("../sacred-texts-json/yashts_darmesteter.json")
 
+def charger_sn():
+    with open("../sacred-texts-json/sirozah_nyayis_darmesteter.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def _sn_dispo():
+    import os
+    return os.path.exists("../sacred-texts-json/sirozah_nyayis_darmesteter.json")
+
+def _parties_avesta():
+    parties = ["Vendidad", "Yashts"]
+    if _sn_dispo():
+        parties += ["Sirozahs", "Nyayishes"]
+    if _mills_dispo():
+        parties += ["Gathas", "Yasna", "Visparad", "Afrinagan", "Gahs", "Fragments"]
+    else:
+        parties += ["Yasna"]
+    return parties
+
 PARTIES_MILLS = ["Gathas", "Yasna", "Visparad", "Afrinagan", "Gahs", "Fragments"]
 
 def charger_mills():
@@ -945,7 +963,7 @@ else:
 
         st.warning("Texte issu d'un OCR de scans du 19e siecle. Chaque section commence par une introduction ou un resume redige par le traducteur, et les notes de bas de page sont melangees au texte : les entites detectees melent donc texte avestique et commentaire. Decoupage approximatif (a une page pres).")
 
-        partie = st.selectbox("Partie", (["Vendidad", "Yashts", "Gathas", "Yasna", "Visparad", "Afrinagan", "Gahs", "Fragments"] if _mills_dispo() else ["Vendidad", "Yashts", "Yasna"]), key="partie_avesta")
+        partie = st.selectbox("Partie", _parties_avesta(), key="partie_avesta")
         if partie == "Vendidad":
             sections = data["vendidad"]
             titres = [f"Fargard {x['fargard']}" for x in sections]
@@ -1002,9 +1020,48 @@ else:
                 with st.expander(f"Notes de Mills ({len(sec_m['notes'])}) - exclues de l'analyse"):
                     for nt in sec_m["notes"]:
                         st.markdown(f"{nt['ref']} {nt['text']}")
+        elif partie == "Sirozahs" and _sn_dispo():
+            sz = charger_sn()["sirozahs"]
+            st.info("Sirozahs : traduction de James Darmesteter (1883, Sacred Books of the East vol. 23). Deux litanies de 30 jours. Le titre du jour 6 du Sirozah I manque dans l'edition et a ete restitue (Khordad). Les notes de bas de page sont dans un volet a part, exclues de l'analyse.")
+            titres_s = [s["titre"] for s in sz]
+            choix_s = st.selectbox("Sirozah", titres_s, key="sirozah_darmesteter")
+            s_data = sz[titres_s.index(choix_s)]
+            liste_versets = [(f"{j['n']} {j['nom']}", nettoyer(j["text"])) for j in s_data["jours"] if j["text"]]
+            afficher_analyse_avec_versets(liste_versets)
+            if s_data["notes"]:
+                with st.expander(f"Notes de Darmesteter ({len(s_data['notes'])}) - exclues de l'analyse"):
+                    for nt in s_data["notes"]:
+                        st.markdown(f"{nt['ref']} {nt['text']}")
+        elif partie == "Nyayishes" and _sn_dispo():
+            ny = charger_sn()["nyayis"]
+            st.info("Nyayishes : traduction de James Darmesteter (1883, Sacred Books of the East vol. 23). Les '. . . .' sont des abreviations de Darmesteter pour des formules repetees ; les crochets sont de lui. L'introduction generale et les notes de bas de page sont dans des volets a part, exclues de l'analyse.")
+            titres_n = [y["titre"] for y in ny]
+            choix_n = st.selectbox("Nyayis", titres_n, key="nyayis_darmesteter")
+            y_data = ny[titres_n.index(choix_n)]
+            liste_versets, dernier, suite = [], 0, 0
+            for p in y_data["paragraphs"]:
+                if p["kind"] != "texte":
+                    continue
+                if p.get("n"):
+                    dernier, suite = p["n"], 0
+                    etiquette = str(dernier)
+                else:
+                    suite += 1
+                    etiquette = f"{dernier}.{suite}" if dernier else f"0.{suite}"
+                liste_versets.append((etiquette, nettoyer(p["text"])))
+            afficher_analyse_avec_versets(liste_versets)
+            intro_n = [p["text"] for p in y_data["paragraphs"] if p["kind"] == "intro_traducteur"]
+            if intro_n:
+                with st.expander(f"Introduction du traducteur ({len(intro_n)}) - exclue de l'analyse"):
+                    for t in intro_n:
+                        st.markdown(t)
+            if y_data["notes"]:
+                with st.expander(f"Notes de Darmesteter ({len(y_data['notes'])}) - exclues de l'analyse"):
+                    for nt in y_data["notes"]:
+                        st.markdown(f"{nt['ref']} {nt['text']}")
         elif partie == "Yashts" and _yashts_dispo():
             ya = charger_yashts()["yashts"]
-            st.info("Yashts : traduction de James Darmesteter (1883, Sacred Books of the East vol. 23), refaite depuis l'edition HTML. Les resumes du traducteur et ses notes de bas de page sont dans des volets a part, exclus de l'analyse. Les formules d'ouverture sont gardees (etiquette 'formule'). Les Sirozahs, Nyayishes et Gahs ne sont pas encore inclus.")
+            st.info("Yashts : traduction de James Darmesteter (1883, Sacred Books of the East vol. 23), refaite depuis l'edition HTML. Les resumes du traducteur et ses notes de bas de page sont dans des volets a part, exclus de l'analyse. Les formules d'ouverture sont gardees (etiquette 'formule'). Sirozahs et Nyayishes : voir leurs parties (les Gahs sont dans Mills).")
             titres_y = [f"{y['titre']}" for y in ya]
             choix_y = st.selectbox("Yasht", titres_y, key="yasht_darmesteter")
             y = ya[titres_y.index(choix_y)]
