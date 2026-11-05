@@ -282,6 +282,12 @@ def textes_coran_complet():
             resultats.append((f"Coran - Sourate {ch}", texte_ch))
     return resultats
 
+_RX_GLOSE_CHARLES = re.compile(r"\s*\((?:i\.\s?e\.|lit\.|literally|see\b|cf\.|Gk\.|Greek|Eth\.|Ethiopic|Heb\.)[^()]{0,300}\)")
+
+def _retirer_gloses_charles(texte):
+    gloses = [g.strip() for g in _RX_GLOSE_CHARLES.findall(texte)]
+    return _RX_GLOSE_CHARLES.sub("", texte), gloses
+
 def textes_enoch_complet():
     resultats = []
     for chapitre in range(1, 110):
@@ -292,6 +298,7 @@ def textes_enoch_complet():
             texte_brut = data["text"]
             texte_sans_titres = re.sub(r"={2,}[^=]*={2,}", "", texte_brut)
             texte_sans_titres = re.sub(r"CHAPTER [IVXLC]+\.", "", texte_sans_titres)
+            texte_sans_titres, _ = _retirer_gloses_charles(texte_sans_titres)
             texte_ch = nettoyer(texte_sans_titres)
             if texte_ch.strip():
                 resultats.append((f"Livre d'Enoch - Chapitre {chapitre}", texte_ch))
@@ -847,9 +854,14 @@ else:
         texte_brut = data["text"]
         texte_sans_titres = re.sub(r"={2,}[^=]*={2,}", "", texte_brut)
         texte_sans_titres = re.sub(r"CHAPTER [IVXLC]+\.", "", texte_sans_titres)
+        texte_sans_titres, gloses_ch = _retirer_gloses_charles(texte_sans_titres)
         paragraphes = [p for p in texte_sans_titres.split("\n\n") if p.strip()]
         liste_versets = [(i + 1, nettoyer(p)) for i, p in enumerate(paragraphes) if nettoyer(p)]
         afficher_analyse_avec_versets(liste_versets)
+        if gloses_ch:
+            with st.expander(f"Gloses de Charles retirees ({len(gloses_ch)}) - exclues de l'analyse"):
+                for g in gloses_ch:
+                    st.markdown("- " + g)
 
     elif corpus == "Rigveda (anglais)":
         numero_livre = st.selectbox("Livre (Mandala)", [f"{i:02d}" for i in range(1, 11)], key="livre_rigveda")
