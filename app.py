@@ -430,6 +430,71 @@ def _parties_avesta():
         parties += ["Yasna"]
     return parties
 
+FICHES_CHEMIN = "../sacred-texts-json/metadonnees_corpus.json"
+
+def _norm_nom(s):
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", s.lower()) if unicodedata.category(c) != "Mn")
+
+def _fmt_an(a):
+    if a is None:
+        return "?"
+    return f"{-a} av. J.-C." if a < 0 else f"{a} ap. J.-C."
+
+def _fmt_plage(d, f):
+    if d is None and f is None:
+        return "non datee"
+    if d == f:
+        return _fmt_an(d)
+    return f"{_fmt_an(d)} - {_fmt_an(f)}"
+
+def _trouver_fiche(corpus):
+    import os
+    if not os.path.exists(FICHES_CHEMIN):
+        return None, False
+    with open(FICHES_CHEMIN, "r", encoding="utf-8") as fh:
+        fiches = json.load(fh)["fiches"]
+    cible = _norm_nom(corpus)
+    for fi in fiches:
+        if any(_norm_nom(n) == cible for n in [fi["corpus"]] + fi.get("aliases", [])):
+            return fi, True
+    for fi in fiches:
+        for n in [fi["corpus"]] + fi.get("aliases", []):
+            nn = _norm_nom(n)
+            if nn and (nn in cible or cible in nn):
+                return fi, True
+    return None, True
+
+def afficher_fiche(corpus):
+    fi, dispo = _trouver_fiche(corpus)
+    if not dispo:
+        return
+    with st.expander("Fiche du texte : datation, transmission et sources"):
+        if fi is None:
+            st.caption("Pas de fiche pour ce corpus pour l'instant.")
+            return
+        libelle = {"consensus": "consensus", "debattu": "debattu", "tres_incertain": "tres incertain"}
+        comp = fi["composition"]
+        st.markdown(f"**Langue d'origine :** {fi['langue_origine']}")
+        st.markdown(f"**Composition :** {_fmt_plage(comp['debut'], comp['fin'])} ({libelle.get(comp['accord'], comp['accord'])}). {comp['note']}")
+        if fi["positions"]:
+            st.markdown("**Positions des specialistes :**")
+            for p in fi["positions"]:
+                st.markdown(f"- {p['auteur']} : {_fmt_plage(p['debut'], p['fin'])}" + (f" - {p['note']}" if p["note"] else ""))
+        if fi["couches"]:
+            st.markdown("**Couches du texte :**")
+            for c in fi["couches"]:
+                st.markdown(f"- {c['nom']} : {_fmt_plage(c['debut'], c['fin'])} ({libelle.get(c['accord'], c['accord'])})" + (f" - {c['note']}" if c["note"] else ""))
+        if fi["transmission"]:
+            st.markdown("**Transmission :**")
+            for t in fi["transmission"]:
+                st.markdown(f"- {t}")
+        for v in fi["a_verifier"]:
+            st.warning("A verifier : " + v)
+        if fi["sources"]:
+            st.markdown("**Sources :** " + " ; ".join(f"[{s['titre']}]({s['url']})" for s in fi["sources"]))
+        st.caption("Les dates sont des fourchettes de composition (negatives = avant J.-C.), pas des certitudes ; les desaccords sont montres tels quels.")
+
 PARTIES_MILLS = ["Gathas", "Yasna", "Visparad", "Afrinagan", "Gahs", "Fragments"]
 
 def charger_mills():
@@ -825,6 +890,9 @@ else:
         st.sidebar.info("Aucun corpus dans cette zone pour l'instant.")
     else:
         corpus = st.sidebar.radio("Corpus", ZONES[zone], key="corpus_select")
+
+    if corpus is not None:
+        afficher_fiche(corpus)
 
     if corpus is None:
         st.info("Choisissez une zone contenant au moins un corpus dans le menu a gauche.")
