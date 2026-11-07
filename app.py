@@ -46,6 +46,33 @@ def charger_nlp():
 
 nlp = charger_nlp()
 
+@st.cache_resource
+def charger_nlp_fr():
+    try:
+        nlp_fr = spacy.load("fr_core_news_sm")
+    except OSError:
+        return None
+    if "ner" in nlp_fr.pipe_names:
+        ruler = nlp_fr.add_pipe("entity_ruler", before="ner")
+    else:
+        ruler = nlp_fr.add_pipe("entity_ruler")
+    ruler.from_disk("../sacred-texts-json/patterns_religieux.jsonl")
+    return nlp_fr
+
+CORPUS_FRANCAIS = {"Popol Vuh"}
+
+def _nlp_langue(langue):
+    if langue == "fr":
+        modele = charger_nlp_fr()
+        if modele is not None:
+            return modele
+    return nlp
+
+def _nlp_courant():
+    return _nlp_langue(st.session_state.get("langue_nlp", "en"))
+
+st.session_state["langue_nlp"] = "en"
+
 LIVRES_TANAKH = {
     "Genesis": "torah", "Exodus": "torah", "Leviticus": "torah", "Numbers": "torah", "Deuteronomy": "torah",
     "Joshua": "neviim", "Judges": "neviim", "I_Samuel": "neviim", "II_Samuel": "neviim",
@@ -209,7 +236,7 @@ def afficher_analyse_avec_versets(liste_versets):
     st.subheader("Entites detectees, avec numero de ligne")
     resultats = []
     for numero, texte_verset in liste_versets:
-        doc = nlp(texte_verset)
+        doc = _nlp_courant()(texte_verset)
         for ent in doc.ents:
             if ent.label_ in CATEGORIES_PERSONNALISEES:
                 resultats.append((numero, ent.text, ent.label_))
@@ -223,7 +250,7 @@ def afficher_analyse_avec_versets(liste_versets):
 def afficher_analyse_globale(texte_complet):
     afficher_fr = st.checkbox("Afficher en français (traduction automatique)", key="trad_checkbox")
 
-    doc = nlp(texte_complet)
+    doc = _nlp_courant()(texte_complet)
     ents_filtrees = [e for e in doc.ents if e.label_ in CATEGORIES_PERSONNALISEES]
 
     st.subheader("Texte")
@@ -802,7 +829,13 @@ def scanner_tous_les_corpus():
     total = len(tous_les_textes)
 
     textes_bruts = [t[3] for t in tous_les_textes]
-    docs = nlp.pipe(textes_bruts, batch_size=100)
+    langues = ["fr" if t[0] in CORPUS_FRANCAIS else "en" for t in tous_les_textes]
+    docs = [None] * len(textes_bruts)
+    for lg in ("en", "fr"):
+        idx = [i for i, l in enumerate(langues) if l == lg]
+        if idx:
+            for i, d in zip(idx, _nlp_langue(lg).pipe([textes_bruts[i] for i in idx], batch_size=100)):
+                docs[i] = d
 
     for i, (doc, (nom_corpus, zone, source_label, texte)) in enumerate(zip(docs, tous_les_textes)):
         for ent in doc.ents:
@@ -1262,11 +1295,14 @@ else:
 
     elif corpus == "Popol Vuh":
         data = charger_popol()
-        st.info("Traduction francaise de Brasseur de Bourbourg (1861, domaine public), faite sur le texte quiche. Elle est litterale mais critiquee par les specialistes, et issue d'un OCR : erreurs possibles. Le texte quiche, les notes et les commentaires de Brasseur sont exclus ; les parentheses sont des ajouts du traducteur. Les traductions modernes sont sous droit d'auteur et ne sont pas incluses. Le texte est en francais : les analyses automatiques (entites, etc.) sont faites avec le modele anglais et seront donc moins fiables.")
+        st.info("Traduction francaise de Brasseur de Bourbourg (1861, domaine public), faite sur le texte quiche. Elle est litterale mais critiquee par les specialistes, et issue d'un OCR : erreurs possibles. Le texte quiche, les notes et les commentaires de Brasseur sont exclus ; les parentheses sont des ajouts du traducteur. Les traductions modernes sont sous droit d'auteur et ne sont pas incluses. Le texte est en francais : les analyses automatiques utilisent le modele francais fr_core_news_sm (a installer separement). Seules les entites des categories du depot (patterns_religieux.jsonl) sont affichees, et les noms quiches peuvent rester non reconnus.")
 
         chapitres = chapitres_popol(data)
         noms = [n for n, _ in chapitres]
         nom_choisi = st.selectbox("Chapitre", noms, key="popol_chapitre")
+        st.session_state["langue_nlp"] = "fr"
+        if charger_nlp_fr() is None:
+            st.warning("Modele francais fr_core_news_sm non installe : l'analyse retombe sur le modele anglais. Installation : python -m spacy download fr_core_news_sm")
         paras = dict(chapitres)[nom_choisi]
         liste_versets = [(str(i + 1), nettoyer(p)) for i, p in enumerate(paras)]
         afficher_analyse_avec_versets(liste_versets)
