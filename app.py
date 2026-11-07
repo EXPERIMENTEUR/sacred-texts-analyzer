@@ -1306,6 +1306,14 @@ else:
         paras = dict(chapitres)[nom_choisi]
         liste_versets = [(str(i + 1), nettoyer(p)) for i, p in enumerate(paras)]
         afficher_analyse_avec_versets(liste_versets)
+        with st.expander("Graphe des personnages (proximite dans le texte)"):
+            try:
+                from graphe_personnages import afficher_graphe_popol
+            except ImportError:
+                st.warning("Module graphe_personnages.py introuvable.")
+            else:
+                _fr = _nlp_langue("fr")
+                afficher_graphe_popol(chapitres, nettoyer, _fr)
 
 
     elif corpus == "Septante (Brenton)":
