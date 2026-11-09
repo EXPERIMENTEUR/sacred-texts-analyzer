@@ -3,3 +3,6 @@ app.py.bak*
 
 patch_app*.py
 *.bak*
+__pycache__/
+fix*.py
+diag_*.py
