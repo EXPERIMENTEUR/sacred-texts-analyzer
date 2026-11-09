@@ -5,6 +5,30 @@ import re
 import time
 from deep_translator import GoogleTranslator
 
+import os
+import subprocess
+import tempfile
+
+
+def _resoudre_donnees():
+    """Dossier des textes : le dossier voisin en local, sinon clone du depot de donnees."""
+    ici = os.path.dirname(os.path.abspath(__file__))
+    local = os.path.abspath(os.path.join(ici, "..", "sacred-texts-json"))
+    if os.path.isdir(local):
+        return local.replace("\\", "/")
+    cible = os.path.join(tempfile.gettempdir(), "sacred-texts-json-v2")
+    if not os.path.isdir(os.path.join(cible, ".git")):
+        url = os.environ.get("DONNEES_URL", "https://github.com/EXPERIMENTEUR/sacred-texts-json-v2.git")
+        try:
+            subprocess.run(["git", "clone", "--depth", "1", url, cible], check=True, capture_output=True, timeout=600)
+        except Exception as e:
+            print("Clonage du depot de donnees impossible :", e)
+    return cible.replace("\\", "/")
+
+
+DATA_DIR = _resoudre_donnees()
+
+
 st.set_page_config(layout="wide")
 st.title("Analyseur de textes sacrés")
 
@@ -41,7 +65,7 @@ for z, liste_corpus in ZONES.items():
 def charger_nlp():
     nlp = spacy.load("en_core_web_sm")
     ruler = nlp.add_pipe("entity_ruler", before="ner")
-    ruler.from_disk("../sacred-texts-json/patterns_religieux.jsonl")
+    ruler.from_disk(DATA_DIR + "/patterns_religieux.jsonl")
     return nlp
 
 nlp = charger_nlp()
@@ -56,7 +80,7 @@ def charger_nlp_fr():
         ruler = nlp_fr.add_pipe("entity_ruler", before="ner")
     else:
         ruler = nlp_fr.add_pipe("entity_ruler")
-    ruler.from_disk("../sacred-texts-json/patterns_religieux.jsonl")
+    ruler.from_disk(DATA_DIR + "/patterns_religieux.jsonl")
     return nlp_fr
 
 CORPUS_FRANCAIS = {"Popol Vuh"}
@@ -87,7 +111,7 @@ LIVRES_TANAKH = {
 
 @st.cache_data
 def charger_coran():
-    with open("../sacred-texts-json/coran/Coran_Anglais.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/coran/Coran_Anglais.json", "r", encoding="utf-8") as f:
         data = json.load(f)
     return data["quran"]
 
@@ -288,7 +312,7 @@ def textes_tanakh_complet():
     resultats = []
     for livre, dossier in LIVRES_TANAKH.items():
         try:
-            with open(f"../sacred-texts-json/{dossier}/{livre}.json", "r", encoding="utf-8") as f:
+            with open(f"{DATA_DIR}/{dossier}/{livre}.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
             for i, chapitre_versets in enumerate(data["text"]):
                 texte_ch = " ".join(nettoyer(v) for v in chapitre_versets)
@@ -320,7 +344,7 @@ def textes_enoch_complet():
     for chapitre in range(1, 110):
         numero_fichier = f"{chapitre:02d}"
         try:
-            with open(f"../sacred-texts-json/enoch/Chapter_{numero_fichier}.json", "r", encoding="utf-8-sig") as f:
+            with open(f"{DATA_DIR}/enoch/Chapter_{numero_fichier}.json", "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
             texte_brut = data["text"]
             texte_sans_titres = re.sub(r"={2,}[^=]*={2,}", "", texte_brut)
@@ -338,7 +362,7 @@ def textes_rigveda_complet():
     for num_livre in range(1, 11):
         num_str = f"{num_livre:02d}"
         try:
-            with open(f"../sacred-texts-json/vedas/rigveda_anglais/Book_{num_str}.json", "r", encoding="utf-8") as f:
+            with open(f"{DATA_DIR}/vedas/rigveda_anglais/Book_{num_str}.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
             for hymne in data["hymns"]:
                 texte_h = nettoyer(hymne["text"])
@@ -353,7 +377,7 @@ def textes_samaveda_complet():
     for num_livre in range(1, 16):
         num_str = f"{num_livre:02d}"
         try:
-            with open(f"../sacred-texts-json/vedas/samaveda_anglais/Book_{num_str}.json", "r", encoding="utf-8") as f:
+            with open(f"{DATA_DIR}/vedas/samaveda_anglais/Book_{num_str}.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
             for entree in data["data"]:
                 texte_e = nettoyer(entree["content"])
@@ -366,7 +390,7 @@ def textes_samaveda_complet():
 def textes_esdras_complet():
     resultats = []
     try:
-        with open("../sacred-texts-json/2esdras_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/2esdras_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
         for chapitre_data in data["chapters"]:
             texte_ch = " ".join(nettoyer(v["text"]) for v in chapitre_data["verses"])
@@ -397,7 +421,7 @@ def _separer_gilgamesh(texte):
 def textes_gilgamesh_complet():
     resultats = []
     try:
-        with open("../sacred-texts-json/gilgamesh_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/gilgamesh_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
         for tablette in data["tablets"]:
             texte_t = nettoyer(_separer_gilgamesh(tablette["text"])[0])
@@ -410,7 +434,7 @@ def textes_gilgamesh_complet():
 def textes_thomas_complet():
     resultats = []
     try:
-        with open("../sacred-texts-json/thomas_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/thomas_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
         for logion in data["sayings"]:
             texte_l = nettoyer(logion["text"])
@@ -421,7 +445,7 @@ def textes_thomas_complet():
     return resultats
 
 def charger_vendidad():
-    with open("../sacred-texts-json/vendidad_darmesteter.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/vendidad_darmesteter.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 def _etiquette_verset(p):
@@ -432,20 +456,20 @@ def _etiquette_verset(p):
     return str(p["n"])
 
 def charger_yashts():
-    with open("../sacred-texts-json/yashts_darmesteter.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/yashts_darmesteter.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 def _yashts_dispo():
     import os
-    return os.path.exists("../sacred-texts-json/yashts_darmesteter.json")
+    return os.path.exists(DATA_DIR + "/yashts_darmesteter.json")
 
 def charger_sn():
-    with open("../sacred-texts-json/sirozah_nyayis_darmesteter.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/sirozah_nyayis_darmesteter.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 def _sn_dispo():
     import os
-    return os.path.exists("../sacred-texts-json/sirozah_nyayis_darmesteter.json")
+    return os.path.exists(DATA_DIR + "/sirozah_nyayis_darmesteter.json")
 
 def _parties_avesta():
     parties = ["Vendidad", "Yashts"]
@@ -457,7 +481,7 @@ def _parties_avesta():
         parties += ["Yasna"]
     return parties
 
-FICHES_CHEMIN = "../sacred-texts-json/metadonnees_corpus.json"
+FICHES_CHEMIN = DATA_DIR + "/metadonnees_corpus.json"
 
 def _norm_nom(s):
     import unicodedata
@@ -525,12 +549,12 @@ def afficher_fiche(corpus):
 PARTIES_MILLS = ["Gathas", "Yasna", "Visparad", "Afrinagan", "Gahs", "Fragments"]
 
 def charger_mills():
-    with open("../sacred-texts-json/mills_avesta.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/mills_avesta.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 def _mills_dispo():
     import os
-    return os.path.exists("../sacred-texts-json/mills_avesta.json")
+    return os.path.exists(DATA_DIR + "/mills_avesta.json")
 
 def _etiquette_mills(p):
     e = _etiquette_verset(p)
@@ -541,7 +565,7 @@ def _etiquette_mills(p):
 def textes_avesta_complet():
     resultats = []
     try:
-        with open("../sacred-texts-json/avesta_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/avesta_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
         try:
             for fg in charger_vendidad()["fargards"]:
@@ -580,7 +604,7 @@ def textes_avesta_complet():
 def textes_testaments_complet():
     resultats = []
     try:
-        with open("../sacred-texts-json/testaments_12_patriarches_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/testaments_12_patriarches_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
         for testament in data["testaments"]:
             for chap in testament["chapters"]:
@@ -594,7 +618,7 @@ def textes_testaments_complet():
 def textes_baruch_complet():
     resultats = []
     try:
-        with open("../sacred-texts-json/baruch_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/baruch_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
         for livre in data["livres"]:
             nom = "2 Baruch" if livre["title"].startswith("2") else "3 Baruch"
@@ -615,7 +639,7 @@ def paragraphes_upanishad(texte):
 
 def charger_upanishads():
     import os
-    dossier = "../sacred-texts-json/upanishads"
+    dossier = DATA_DIR + "/upanishads"
     resultat = []
     for nom in sorted(os.listdir(dossier)):
         if nom.endswith(".json"):
@@ -630,7 +654,7 @@ def charger_upanishads():
 
 def extras_upanishad(nom_affiche):
     import os
-    chemin = os.path.join("../sacred-texts-json/upanishads", nom_affiche.replace(" ", "_") + ".json")
+    chemin = os.path.join(DATA_DIR + "/upanishads", nom_affiche.replace(" ", "_") + ".json")
     try:
         with open(chemin, "r", encoding="utf-8-sig") as f:
             d = json.load(f)
@@ -649,7 +673,7 @@ def textes_upanishads_complet():
     return resultats
 
 def charger_enuma():
-    with open("../sacred-texts-json/enuma_elish_complete.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/enuma_elish_complete.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 def textes_enuma_complet():
@@ -664,7 +688,7 @@ def textes_enuma_complet():
     return resultats
 
 def charger_atrahasis():
-    with open("../sacred-texts-json/atrahasis_complete.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/atrahasis_complete.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 def vers_atrahasis(section):
@@ -682,7 +706,7 @@ def textes_atrahasis_complet():
     return resultats
 
 def charger_edda():
-    with open("../sacred-texts-json/edda_complete.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/edda_complete.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 TYPES_TEXTE_EDDA = ("stanza", "verse", "prose", "locuteur")
@@ -702,7 +726,7 @@ def textes_edda_complet():
     return resultats
 
 def charger_popol():
-    with open("../sacred-texts-json/popol_vuh_complete.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/popol_vuh_complete.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 def chapitres_popol(data):
@@ -727,7 +751,7 @@ def textes_popol_complet():
     return resultats
 
 def charger_septante():
-    with open("../sacred-texts-json/septuagint_complete.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/septuagint_complete.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 def textes_septante_complet():
@@ -743,7 +767,7 @@ def textes_septante_complet():
     return resultats
 
 def charger_pistis():
-    with open("../sacred-texts-json/pistis_sophia_complete.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/pistis_sophia_complete.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 def etiquette_pistis(p):
@@ -764,7 +788,7 @@ def textes_pistis_complet():
     return resultats
 
 def charger_huarochiri():
-    with open("../sacred-texts-json/huarochiri_avila_complete.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/huarochiri_avila_complete.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 def textes_huarochiri_complet():
@@ -779,7 +803,7 @@ def textes_huarochiri_complet():
     return resultats
 
 def charger_grey():
-    with open("../sacred-texts-json/grey_polynesian_complete.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR + "/grey_polynesian_complete.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 def textes_grey_complet():
@@ -934,7 +958,7 @@ else:
         livre = st.selectbox("Livre", sorted(LIVRES_TANAKH.keys()), key="livre_select")
         dossier = LIVRES_TANAKH[livre]
 
-        with open(f"../sacred-texts-json/{dossier}/{livre}.json", "r", encoding="utf-8") as f:
+        with open(f"{DATA_DIR}/{dossier}/{livre}.json", "r", encoding="utf-8") as f:
             data = json.load(f)
 
         nb_chapitres = len(data["text"])
@@ -967,7 +991,7 @@ else:
         chapitre = st.number_input("Chapitre", min_value=1, max_value=109, value=1, key="chapitre_enoch")
         numero_fichier = f"{chapitre:02d}"
 
-        with open(f"../sacred-texts-json/enoch/Chapter_{numero_fichier}.json", "r", encoding="utf-8-sig") as f:
+        with open(f"{DATA_DIR}/enoch/Chapter_{numero_fichier}.json", "r", encoding="utf-8-sig") as f:
             data = json.load(f)
 
         texte_brut = data["text"]
@@ -985,7 +1009,7 @@ else:
     elif corpus == "Rigveda (anglais)":
         numero_livre = st.selectbox("Livre (Mandala)", [f"{i:02d}" for i in range(1, 11)], key="livre_rigveda")
 
-        with open(f"../sacred-texts-json/vedas/rigveda_anglais/Book_{numero_livre}.json", "r", encoding="utf-8") as f:
+        with open(f"{DATA_DIR}/vedas/rigveda_anglais/Book_{numero_livre}.json", "r", encoding="utf-8") as f:
             data = json.load(f)
 
         hymnes = data["hymns"]
@@ -1000,7 +1024,7 @@ else:
     elif corpus == "Samaveda (anglais)":
         numero_livre = st.selectbox("Livre", [f"{i:02d}" for i in range(1, 16)], key="livre_samaveda")
 
-        with open(f"../sacred-texts-json/vedas/samaveda_anglais/Book_{numero_livre}.json", "r", encoding="utf-8") as f:
+        with open(f"{DATA_DIR}/vedas/samaveda_anglais/Book_{numero_livre}.json", "r", encoding="utf-8") as f:
             data = json.load(f)
 
         entrees = data["data"]
@@ -1014,7 +1038,7 @@ else:
         afficher_analyse_avec_versets(liste_versets)
 
     elif corpus == "Apocalypse d'Esdras":
-        with open("../sacred-texts-json/2esdras_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/2esdras_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
 
         chapitres_esdras = data["chapters"]
@@ -1027,7 +1051,7 @@ else:
         afficher_analyse_avec_versets(liste_versets)
 
     elif corpus == "Epopee de Gilgamesh":
-        with open("../sacred-texts-json/gilgamesh_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/gilgamesh_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
 
         tablettes_gilgamesh = data["tablets"]
@@ -1045,7 +1069,7 @@ else:
                     st.markdown(nt)
 
     elif corpus == "Evangile de Thomas":
-        with open("../sacred-texts-json/thomas_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/thomas_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
 
         logia = data["sayings"]
@@ -1059,7 +1083,7 @@ else:
         afficher_analyse_avec_versets(liste_versets)
 
     elif corpus == "Avesta":
-        with open("../sacred-texts-json/avesta_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/avesta_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
 
         st.warning("Texte issu d'un OCR de scans du 19e siecle. Chaque section commence par une introduction ou un resume redige par le traducteur, et les notes de bas de page sont melangees au texte : les entites detectees melent donc texte avestique et commentaire. Decoupage approximatif (a une page pres).")
@@ -1188,7 +1212,7 @@ else:
             afficher_analyse_globale(nettoyer(section_data["text"]))
 
     elif corpus == "Testaments des 12 Patriarches":
-        with open("../sacred-texts-json/testaments_12_patriarches_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/testaments_12_patriarches_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
 
         st.info("Traduction anglaise du 19e siecle (Ante-Nicene Fathers, vol. VIII). La datation de ce texte et la presence d'interpolations chretiennes sont debattues parmi les chercheurs. Les notes critiques du traducteur ont ete retirees.")
@@ -1201,7 +1225,7 @@ else:
         afficher_analyse_avec_versets(liste_versets)
 
     elif corpus == "Apocalypse de Baruch":
-        with open("../sacred-texts-json/baruch_complete.json", "r", encoding="utf-8") as f:
+        with open(DATA_DIR + "/baruch_complete.json", "r", encoding="utf-8") as f:
             data = json.load(f)
 
         st.info("2 Baruch : traduction de R. H. Charles (1913), texte propre du Wesley Center (NNU), sans notes, 85 chapitres (la page source s'arrete a 85:2 : les chapitres 86-87 manquent). Les crochets sont ceux de Charles (interpolations supposees). 3 Baruch : traduction de H. M. Hughes (1913) issue d'un OCR ; le commentaire des editeurs a ete retire par heuristique, quelques fragments peuvent rester.")
