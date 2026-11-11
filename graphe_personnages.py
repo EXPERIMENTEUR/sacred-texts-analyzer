@@ -24,7 +24,9 @@ def _cle(nom):
 def construire(textes, ids, _nlp, categories):
     surfaces, cats, presence = defaultdict(Counter), defaultdict(Counter), defaultdict(set)
     par_paragraphe = []
-    for i, doc in enumerate(_nlp.pipe(list(textes), batch_size=50)):
+    # Seul le repereur de motifs sert ici : on coupe le reste du modele (beaucoup plus rapide)
+    desactiver = [n for n in _nlp.pipe_names if n != "entity_ruler"]
+    for i, doc in enumerate(_nlp.pipe(list(textes), batch_size=200, disable=desactiver)):
         cles = set()
         for e in doc.ents:
             if e.label_ in categories:
