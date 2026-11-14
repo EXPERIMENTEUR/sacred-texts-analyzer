@@ -225,7 +225,10 @@ def traduire_francais(texte):
     return None, True
 
 def afficher_analyse_avec_versets(liste_versets):
-    afficher_fr = st.checkbox("Afficher en français (traduction automatique)", key="trad_checkbox")
+    _deja_fr = st.session_state.get("langue_nlp", "en") == "fr"
+    if _deja_fr:
+        st.caption("Texte deja en francais : pas de traduction automatique.")
+    afficher_fr = (not _deja_fr) and st.checkbox("Afficher en français (traduction automatique)", key="trad_checkbox")
 
     st.subheader("Texte (ligne par ligne)")
     blocage, restantes, appels = False, 0, 0
@@ -272,7 +275,10 @@ def afficher_analyse_avec_versets(liste_versets):
         st.write("Aucune entite personnalisee detectee.")
 
 def afficher_analyse_globale(texte_complet):
-    afficher_fr = st.checkbox("Afficher en français (traduction automatique)", key="trad_checkbox")
+    _deja_fr = st.session_state.get("langue_nlp", "en") == "fr"
+    if _deja_fr:
+        st.caption("Texte deja en francais : pas de traduction automatique.")
+    afficher_fr = (not _deja_fr) and st.checkbox("Afficher en français (traduction automatique)", key="trad_checkbox")
 
     doc = _nlp_courant()(texte_complet)
     ents_filtrees = [e for e in doc.ents if e.label_ in CATEGORIES_PERSONNALISEES]
