@@ -6,3 +6,4 @@ patch_app*.py
 __pycache__/
 fix*.py
 diag_*.py
+patch_*.py
