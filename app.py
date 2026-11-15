@@ -274,6 +274,15 @@ def afficher_analyse_avec_versets(liste_versets):
     else:
         st.write("Aucune entite personnalisee detectee.")
 
+    if st.session_state.get("langue_nlp", "en") != "fr":
+        with st.expander("Graphe des liens entre entites (proximite dans le texte)"):
+            try:
+                from graphe_personnages import afficher_graphe_passage
+            except ImportError:
+                st.warning("Module graphe_personnages.py introuvable.")
+            else:
+                afficher_graphe_passage(liste_versets, _nlp_courant())
+
 def afficher_analyse_globale(texte_complet):
     _deja_fr = st.session_state.get("langue_nlp", "en") == "fr"
     if _deja_fr:

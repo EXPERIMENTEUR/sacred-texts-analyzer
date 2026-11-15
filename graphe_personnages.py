@@ -24,9 +24,7 @@ def _cle(nom):
 def construire(textes, ids, _nlp, categories):
     surfaces, cats, presence = defaultdict(Counter), defaultdict(Counter), defaultdict(set)
     par_paragraphe = []
-    # Seul le repereur de motifs sert ici : on coupe le reste du modele (beaucoup plus rapide)
-    desactiver = [n for n in _nlp.pipe_names if n != "entity_ruler"]
-    for i, doc in enumerate(_nlp.pipe(list(textes), batch_size=200, disable=desactiver)):
+    for i, doc in enumerate(_nlp.pipe(list(textes), batch_size=50)):
         cles = set()
         for e in doc.ents:
             if e.label_ in categories:
@@ -141,3 +139,61 @@ def afficher_graphe_popol(chapitres, nettoyer, nlp):
         for i in aretes[(a, b)][:5]:
             nom, num = ids[i]
             st.markdown("*%s, paragraphe %d* : %s" % (nom, num, textes[i][:600]))
+
+
+def afficher_graphe_passage(liste_versets, nlp):
+    """Graphe d'un passage quelconque : liste_versets = [(numero, texte), ...]. Meme logique que pour le Popol Vuh."""
+    try:
+        import networkx  # noqa: F401
+        import plotly.graph_objects  # noqa: F401
+    except ImportError:
+        st.warning("Bibliotheques manquantes. Installation : python -m pip install networkx plotly")
+        return
+    if nlp is None:
+        st.warning("Modele de langue indisponible pour ce texte.")
+        return
+    if len(liste_versets) < 2:
+        st.info("Passage trop court pour un graphe.")
+        return
+    st.caption("Deux entites sont reliees quand elles apparaissent dans la meme ligne du passage affiche ; le poids "
+               "d'un lien est le nombre de lignes communes. Cela montre une proximite dans le texte, pas une relation "
+               "etablie. Seules les entites des motifs du depot sont prises en compte : un nom absent des motifs reste invisible.")
+    if not st.checkbox("Calculer le graphe de ce passage", key="graphe_passage_actif"):
+        return
+    textes = tuple(t for _, t in liste_versets)
+    ids = tuple(str(n) for n, _ in liste_versets)
+    noeuds, aretes = construire(textes, ids, nlp, tuple(CATEGORIES_GRAPHE))
+    if not aretes:
+        st.info("Aucun lien : moins de deux entites reconnues dans une meme ligne de ce passage.")
+        return
+    presentes = sorted({noeuds[k]["cat"] for ab in aretes for k in ab})
+    wmax = max(len(v) for v in aretes.values())
+    col1, col2 = st.columns(2)
+    with col1:
+        actives = st.multiselect("Categories", presentes, default=presentes,
+                                 format_func=lambda c: CATEGORIES_GRAPHE[c], key="graphe_passage_cats")
+    with col2:
+        if wmax > 1:
+            poids_min = st.slider("Poids minimum d'un lien (lignes communes)", 1, wmax, 1, key="graphe_passage_poids")
+        else:
+            poids_min = 1
+    fig, g = _figure(noeuds, aretes, poids_min, set(actives))
+    if fig is None:
+        st.info("Aucun lien ne passe ces filtres.")
+        return
+    st.caption("%d entites, %d liens affiches." % (g.number_of_nodes(), g.number_of_edges()))
+    try:
+        st.plotly_chart(fig, width="stretch")
+    except TypeError:
+        st.plotly_chart(fig, use_container_width=True)
+    top = sorted(((len(idx), a, b) for (a, b), idx in aretes.items()
+                  if noeuds[a]["cat"] in actives and noeuds[b]["cat"] in actives), reverse=True)[:25]
+    st.markdown("**Liens les plus forts**")
+    st.dataframe([{"Entite A": noeuds[a]["nom"], "Entite B": noeuds[b]["nom"], "Lignes communes": n}
+                  for n, a, b in top], hide_index=True)
+    if top:
+        etiquettes = ["%s - %s (%d)" % (noeuds[a]["nom"], noeuds[b]["nom"], n) for n, a, b in top]
+        choix = st.selectbox("Verifier un lien dans le texte", etiquettes, key="graphe_passage_verif")
+        n, a, b = top[etiquettes.index(choix)]
+        for i in aretes[(a, b)][:5]:
+            st.markdown("*Ligne %s* : %s" % (ids[i], textes[i][:600]))
