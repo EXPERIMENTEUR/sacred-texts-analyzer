@@ -141,7 +141,7 @@ def afficher_graphe_popol(chapitres, nettoyer, nlp):
             st.markdown("*%s, paragraphe %d* : %s" % (nom, num, textes[i][:600]))
 
 
-def afficher_graphe_passage(liste_versets, nlp):
+def afficher_graphe_passage(liste_versets, nlp, unite="ligne"):
     """Graphe d'un passage quelconque : liste_versets = [(numero, texte), ...]. Meme logique que pour le Popol Vuh."""
     try:
         import networkx  # noqa: F401
@@ -155,8 +155,8 @@ def afficher_graphe_passage(liste_versets, nlp):
     if len(liste_versets) < 2:
         st.info("Passage trop court pour un graphe.")
         return
-    st.caption("Deux entites sont reliees quand elles apparaissent dans la meme ligne du passage affiche ; le poids "
-               "d'un lien est le nombre de lignes communes. Cela montre une proximite dans le texte, pas une relation "
+    st.caption("Deux entites sont reliees quand elles apparaissent dans le meme (" + unite + ") du passage affiche ; le poids "
+               "d'un lien est le nombre de " + unite + "s en commun. Cela montre une proximite dans le texte, pas une relation "
                "etablie. Seules les entites des motifs du depot sont prises en compte : un nom absent des motifs reste invisible.")
     if not st.checkbox("Calculer le graphe de ce passage", key="graphe_passage_actif"):
         return
@@ -164,7 +164,7 @@ def afficher_graphe_passage(liste_versets, nlp):
     ids = tuple(str(n) for n, _ in liste_versets)
     noeuds, aretes = construire(textes, ids, nlp, tuple(CATEGORIES_GRAPHE))
     if not aretes:
-        st.info("Aucun lien : moins de deux entites reconnues dans une meme ligne de ce passage.")
+        st.info("Aucun lien : moins de deux entites reconnues dans une meme unite (" + unite + ") de ce passage.")
         return
     presentes = sorted({noeuds[k]["cat"] for ab in aretes for k in ab})
     wmax = max(len(v) for v in aretes.values())
@@ -174,7 +174,7 @@ def afficher_graphe_passage(liste_versets, nlp):
                                  format_func=lambda c: CATEGORIES_GRAPHE[c], key="graphe_passage_cats")
     with col2:
         if wmax > 1:
-            poids_min = st.slider("Poids minimum d'un lien (lignes communes)", 1, wmax, 1, key="graphe_passage_poids")
+            poids_min = st.slider("Poids minimum d'un lien (" + unite + "s en commun)", 1, wmax, 1, key="graphe_passage_poids")
         else:
             poids_min = 1
     fig, g = _figure(noeuds, aretes, poids_min, set(actives))
@@ -189,11 +189,11 @@ def afficher_graphe_passage(liste_versets, nlp):
     top = sorted(((len(idx), a, b) for (a, b), idx in aretes.items()
                   if noeuds[a]["cat"] in actives and noeuds[b]["cat"] in actives), reverse=True)[:25]
     st.markdown("**Liens les plus forts**")
-    st.dataframe([{"Entite A": noeuds[a]["nom"], "Entite B": noeuds[b]["nom"], "Lignes communes": n}
+    st.dataframe([{"Entite A": noeuds[a]["nom"], "Entite B": noeuds[b]["nom"], "En commun (%ss)" % unite: n}
                   for n, a, b in top], hide_index=True)
     if top:
         etiquettes = ["%s - %s (%d)" % (noeuds[a]["nom"], noeuds[b]["nom"], n) for n, a, b in top]
         choix = st.selectbox("Verifier un lien dans le texte", etiquettes, key="graphe_passage_verif")
         n, a, b = top[etiquettes.index(choix)]
         for i in aretes[(a, b)][:5]:
-            st.markdown("*Ligne %s* : %s" % (ids[i], textes[i][:600]))
+            st.markdown("*%s %s* : %s" % (unite.capitalize(), ids[i], textes[i][:600]))

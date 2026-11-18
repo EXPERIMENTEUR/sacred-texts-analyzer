@@ -323,6 +323,16 @@ def afficher_analyse_globale(texte_complet):
     else:
         st.write("Aucune entite personnalisee detectee.")
 
+    with st.expander("Graphe des liens entre entites (proximite dans le texte)"):
+        try:
+            from graphe_personnages import afficher_graphe_passage
+        except ImportError:
+            st.warning("Module graphe_personnages.py introuvable.")
+        else:
+            _phrases = [p for p in re.split(r"(?<=[.!?])\s+", texte_complet) if p.strip()]
+            _blocs = [(str(i // 3 + 1), " ".join(_phrases[i:i + 3])) for i in range(0, len(_phrases), 3)]
+            afficher_graphe_passage(_blocs, _nlp_courant(), unite="bloc de 3 phrases")
+
 def textes_tanakh_complet():
     resultats = []
     for livre, dossier in LIVRES_TANAKH.items():
